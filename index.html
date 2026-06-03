@@ -1,0 +1,3322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Chain USDC Bridge | CCTP V2 Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ethers.js v6 for real chain interactions -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js" type="application/javascript"></script>
+  <!-- Icons are inlined as SVG below (no CDN dependency) -->
+  <style>
+    /* Make <i class="fas fa-xxx"> behave like a 1em icon slot before JS swaps it to SVG */
+    i[class*="fa-"] { display:inline-block; width:1em; height:1em; vertical-align:-0.125em; }
+    i[class*="fa-"] svg { width:100%; height:100%; display:block; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    body { background: linear-gradient(135deg, #1a0033, #4b0082); font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .arc-logo { animation: pulse-glow 2.4s ease-in-out infinite; }
+    @keyframes pulse-glow {
+      0%,100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); opacity:1; }
+      50%      { box-shadow: 0 0 16px 4px rgba(168,85,247,0.45); opacity:.85; }
+    }
+    .progress-bar { transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1); }
+    .modal { animation: modalPop 0.25s ease-out; }
+    @keyframes modalPop { from { transform:scale(0.94); opacity:0; } to { transform:scale(1); opacity:1; } }
+    .lang-btn-active { background:rgba(255,255,255,0.95) !important; color:#1a0033 !important; font-weight:700; }
+    /* custom select arrow */
+    select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%23a78bfa' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .6rem center; padding-right:1.8rem; }
+    /* dropdown option items — force dark theme so opened list isn't white */
+    select option { background:#1c0a35; color:#fff; padding:8px; }
+    select option:checked { background:#4c1d95; color:#fff; }
+    /* status fade-in for DeFi action results */
+    #defiStatus { transition: opacity .25s; }
+    /* flip animations — horizontal pair uses Y-axis, vertical pair uses X-axis */
+    .flip-h { animation: flipH .3s ease-in-out; }
+    @keyframes flipH { 0%{transform:rotateY(0deg)} 50%{transform:rotateY(90deg)} 100%{transform:rotateY(180deg)} }
+    .flip-v { animation: flipV .3s ease-in-out; }
+    @keyframes flipV { 0%{transform:rotateX(0deg)} 50%{transform:rotateX(90deg)} 100%{transform:rotateX(180deg)} }
+  </style>
+</head>
+<body class="text-white min-h-screen flex items-center justify-center p-6 relative">
+
+  <!-- Background decoration — using FA icons via pseudo + SVG, not emoji -->
+  <div class="absolute inset-0 pointer-events-none overflow-hidden">
+    <div class="absolute top-10 left-10 text-purple-500/10 text-9xl leading-none select-none" aria-hidden="true">
+      <i class="fas fa-link"></i>
+    </div>
+    <div class="absolute bottom-16 right-10 text-indigo-400/10 text-9xl leading-none select-none" aria-hidden="true">
+      <i class="fas fa-bolt"></i>
+    </div>
+    <!-- subtle radial glow -->
+    <div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-purple-600/10 blur-3xl"></div>
+  </div>
+
+  <div class="max-w-4xl w-full bg-white/[0.08] backdrop-blur-3xl rounded-3xl shadow-2xl border border-purple-400/30 p-8 md:p-10 relative z-10">
+
+    <!-- ── Top bar ── -->
+    <div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
+      <div class="inline-flex bg-white/10 rounded-3xl p-1 text-sm font-medium">
+        <button onclick="setMode('bridge')" id="bridgeTab"
+                class="px-6 py-2.5 rounded-3xl transition-all data-[active=true]:bg-white data-[active=true]:text-black data-[active=true]:shadow-sm"
+                data-i18n="tab_bridge">Bridge</button>
+        <button onclick="setMode('defi')" id="defiTab"
+                class="px-6 py-2.5 rounded-3xl transition-all data-[active=true]:bg-white data-[active=true]:text-black data-[active=true]:shadow-sm"
+                data-i18n="tab_defi">DeFi Actions</button>
+        <button onclick="setMode('agent')" id="agentTab"
+                class="px-6 py-2.5 rounded-3xl transition-all data-[active=true]:bg-gradient-to-r data-[active=true]:from-purple-500 data-[active=true]:to-pink-500 data-[active=true]:text-white data-[active=true]:shadow-sm relative">
+          <i class="fas fa-sparkles text-[10px] mr-1"></i>
+          <span data-i18n="tab_agent">AI Agent</span>
+          <span class="absolute -top-1 -right-1 text-[8px] bg-pink-500 text-white px-1 rounded-full font-bold">NEW</span>
+        </button>
+        <button onclick="setMode('history')" id="historyTab"
+                class="px-6 py-2.5 rounded-3xl transition-all data-[active=true]:bg-white data-[active=true]:text-black data-[active=true]:shadow-sm"
+                data-i18n="tab_history">History</button>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="inline-flex bg-white/10 rounded-2xl p-1 text-xs font-semibold gap-1">
+          <button id="btnEN" onclick="setLang('en')" class="px-3 py-1.5 rounded-xl transition lang-btn-active">EN</button>
+          <button id="btnZH" onclick="setLang('zh')" class="px-3 py-1.5 rounded-xl transition hover:bg-white/10">中文</button>
+        </div>
+        <button onclick="showKitKeyModal()" id="kitKeyBtn"
+                class="w-9 h-9 bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl flex items-center justify-center transition text-purple-300 hover:text-white"
+                title="Circle Kit Key settings">
+          <i class="fas fa-gear text-sm"></i>
+        </button>
+        <button onclick="showMonetizationModal()" id="monBtn"
+                class="w-9 h-9 bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl flex items-center justify-center transition text-purple-300 hover:text-white relative"
+                title="Creator monetization">
+          <i class="fas fa-circle-dollar-to-slot text-sm"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         BRIDGE PANEL
+    ══════════════════════════════════════ -->
+    <div id="bridgePanel">
+
+      <!-- Header row -->
+      <div class="flex items-center justify-between mb-8 flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <!-- Arc logo: purple circle with lightning bolt -->
+          <div class="arc-logo w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-bolt text-white text-lg"></i>
+          </div>
+          <h1 class="text-2xl font-semibold tracking-tight">Arc Bridge Kit</h1>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Live badge: chains supported -->
+          <div class="text-xs bg-emerald-400/15 text-emerald-300 px-4 py-1.5 rounded-full flex items-center gap-2 border border-emerald-400/25">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+            </span>
+            <span data-i18n="badge_live">4 testnets · live</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero -->
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500/80 to-indigo-500/80 text-white text-xs font-medium px-5 py-2 rounded-full mb-5 border border-purple-400/30">
+          <i class="fas fa-circle-nodes text-purple-200 text-xs"></i>
+          <span data-i18n="badge_cctp">CCTP Native Cross-Chain</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-semibold leading-tight tracking-tight" data-i18n="hero_title">Cross-Chain USDC Bridge</h2>
+        <p class="text-base text-purple-200/80 mt-3" data-i18n="hero_desc">Powered by CCTP V2 · Sub-second finality · 4 testnets</p>
+      </div>
+
+      <!-- Bridge form -->
+      <div class="bg-black/30 rounded-3xl p-6 border border-white/5">
+
+        <!-- Chain selector -->
+        <div class="grid md:grid-cols-[1fr_48px_1fr] gap-4 items-end">
+          <!-- From -->
+          <div>
+            <label class="block text-purple-300 text-xs mb-2 font-medium uppercase tracking-wider" data-i18n="label_from">From</label>
+            <div class="bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl p-4 flex items-center gap-3 transition">
+              <i class="fas fa-circle-dot text-purple-400 text-sm shrink-0"></i>
+              <!-- Options populated by populateChainSelects() at runtime -->
+              <select id="fromChain" onchange="checkSameChain('from'); refreshBridgeBalance(); updateBridgeGasEstimate()"
+                      class="bg-transparent flex-1 text-base font-medium focus:outline-none cursor-pointer text-white">
+              </select>
+            </div>
+          </div>
+
+          <!-- Swap chains button -->
+          <div class="flex justify-center mb-0.5">
+            <button onclick="swapChains()" id="swapChainsBtn"
+                    class="w-10 h-10 bg-white/10 hover:bg-purple-500/40 border border-white/10 hover:border-purple-400/50 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90"
+                    title="Swap chains">
+              <i class="fas fa-arrow-right-arrow-left text-purple-300 text-sm"></i>
+            </button>
+          </div>
+
+          <!-- To -->
+          <div>
+            <label class="block text-purple-300 text-xs mb-2 font-medium uppercase tracking-wider" data-i18n="label_to">To</label>
+            <div id="toChainBorder" class="bg-white/10 hover:bg-white/15 border-2 border-purple-400/60 rounded-2xl p-4 flex items-center gap-3 transition">
+              <i class="fas fa-circle-dot text-indigo-400 text-sm shrink-0"></i>
+              <select id="toChain" onchange="checkSameChain('to')"
+                      class="bg-transparent flex-1 text-base font-medium focus:outline-none cursor-pointer text-white">
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Amount -->
+        <div class="mt-6">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-purple-300 text-xs font-medium uppercase tracking-wider" data-i18n="label_amount">Amount</label>
+            <div class="flex items-center gap-2 text-[11px]">
+              <span class="text-purple-300/70" data-i18n="label_balance">Balance:</span>
+              <span id="bridgeBalance" class="font-mono text-white/80">—</span>
+              <button onclick="setMaxBridge()" id="bridgeMaxBtn"
+                      class="px-2 py-0.5 bg-purple-500/20 hover:bg-purple-500/40 border border-purple-400/30 hover:border-purple-400/60 rounded-md text-purple-200 hover:text-white text-[10px] font-semibold uppercase tracking-wider transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      disabled>MAX</button>
+            </div>
+          </div>
+          <div class="relative">
+            <input id="amount" type="number" placeholder="0.00" min="0.01" step="0.01" oninput="updateFeeRows()"
+                   class="w-full bg-white/10 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-2xl pl-6 pr-36 py-5 text-4xl font-mono focus:outline-none transition placeholder-white/20">
+            <div class="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+              <span class="text-xl font-semibold text-amber-300">USDC</span>
+              <span class="w-7 h-7 bg-[#2775ca] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0">$</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gas + Fee info row -->
+        <div class="mt-4 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-[11px] space-y-1">
+          <div class="flex justify-between">
+            <span class="text-purple-300/70 flex items-center gap-1.5">
+              <i class="fas fa-bolt text-amber-400 text-[10px]"></i>
+              <span data-i18n="label_gas">Network fee (est.)</span>
+            </span>
+            <span id="bridgeGasEst" class="font-mono text-white/80">—</span>
+          </div>
+          <div id="bridgeFeeRow" class="hidden flex justify-between">
+            <span class="text-purple-300/70 flex items-center gap-1.5">
+              <i class="fas fa-circle-dollar-to-slot text-purple-400 text-[10px]"></i>
+              <span data-i18n="label_creator_fee">Creator fee</span>
+            </span>
+            <span id="bridgeFeeAmt" class="font-mono text-amber-300">—</span>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex flex-col sm:flex-row gap-3 mt-4">
+          <button onclick="showWalletModal()" id="connectBtn"
+                  class="flex-1 py-4 bg-white text-black font-semibold text-base rounded-2xl hover:bg-purple-50 hover:scale-[1.01] transition flex items-center justify-center gap-2.5">
+            <i class="fas fa-wallet text-purple-700"></i>
+            <span data-i18n="btn_connect">Connect Wallet</span>
+          </button>
+          <button onclick="startBridge()"
+                  class="flex-1 py-4 bg-gradient-to-r from-purple-500 to-indigo-500 font-semibold text-base rounded-2xl hover:from-purple-400 hover:to-indigo-400 hover:scale-[1.01] transition flex items-center justify-center gap-2.5 shadow-lg shadow-purple-500/25">
+            <i class="fas fa-arrow-right-arrow-left"></i>
+            <span data-i18n="btn_bridge">Start Bridge</span>
+          </button>
+        </div>
+
+        <!-- Faucets -->
+        <div class="mt-5 pt-5 border-t border-white/10">
+          <div class="text-[11px] text-purple-300 font-medium uppercase tracking-wider mb-3 flex items-center gap-2">
+            <i class="fas fa-faucet text-purple-400 text-xs"></i>
+            <span data-i18n="faucets_title">Testnet Faucets</span>
+          </div>
+          <!-- One row per chain: chain name + USDC faucet + native gas faucet -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+
+            <!-- Arc Testnet -->
+            <div class="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+              <div class="flex items-center gap-1.5 text-white/80 font-medium mb-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Arc Testnet
+                <span class="text-[9px] text-purple-300/70">★ featured</span>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="USDC = gas on Arc. Select Arc Testnet in dropdown">USDC (= gas) ↗</a>
+              </div>
+            </div>
+
+            <!-- Ethereum Sepolia -->
+            <div class="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+              <div class="flex items-center gap-1.5 text-white/80 font-medium mb-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                Ethereum Sepolia
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Google) ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Alchemy ↗</a>
+              </div>
+            </div>
+
+            <!-- Base Sepolia -->
+            <div class="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+              <div class="flex items-center gap-1.5 text-white/80 font-medium mb-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                Base Sepolia
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://www.alchemy.com/faucets/base-sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Alchemy) ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://portal.cdp.coinbase.com/products/faucet" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Coinbase ↗</a>
+              </div>
+            </div>
+
+            <!-- Arbitrum Sepolia -->
+            <div class="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+              <div class="flex items-center gap-1.5 text-white/80 font-medium mb-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                Arbitrum Sepolia
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://www.alchemy.com/faucets/arbitrum-sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Alchemy) ↗</a>
+                <span class="text-white/20">·</span>
+                <a href="https://bridge.arbitrum.io" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Bridge ↗</a>
+              </div>
+            </div>
+
+          </div>
+          <p class="text-[10px] text-purple-400/60 mt-3 text-center" data-i18n="faucets_hint">All USDC faucets use the same Circle faucet — choose your network on the page</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════
+         DEFI PANEL
+    ══════════════════════════════════════ -->
+    <div id="defiPanel" class="hidden">
+      <div class="mb-6">
+        <h2 class="text-2xl font-semibold mb-1.5" data-i18n="tab_defi">DeFi Actions</h2>
+        <p class="text-purple-300/80 text-sm" data-i18n="defi_subtitle">Send and balance check work on all 4 testnets. Swap is a UI demo (real DEX coming).</p>
+      </div>
+
+      <!-- Status bar -->
+      <div id="defiStatus" class="hidden mb-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 flex items-start gap-2.5">
+        <i class="fas fa-circle-check mt-0.5 shrink-0"></i>
+        <span id="defiStatusText"></span>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-5">
+
+        <!-- ── Swap Card ── -->
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-5 hover:bg-white/[0.11] hover:border-white/15 transition">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2 text-purple-300 text-xs font-semibold uppercase tracking-wide">
+              <i class="fas fa-arrow-right-arrow-left text-xs"></i>
+              Swap
+            </div>
+            <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-400/20 px-2 py-0.5 rounded-full">Arc Testnet</span>
+          </div>
+          <p class="text-[11px] text-amber-400/70 mb-4" data-i18n="swap_kitkey">Real integration requires a Circle Console Kit Key</p>
+
+          <!-- Pay box -->
+          <div class="bg-black/25 border border-white/10 rounded-2xl px-4 pt-3 pb-3">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="text-[11px] text-purple-400" data-i18n="swap_pay">You pay</div>
+              <div class="flex items-center gap-1.5 text-[10px]">
+                <span class="text-purple-300/70" data-i18n="label_balance">Balance:</span>
+                <span id="swapBalance" class="font-mono text-white/80">—</span>
+                <button onclick="setMaxSwap()" id="swapMaxBtn"
+                        class="px-1.5 py-0.5 bg-purple-500/20 hover:bg-purple-500/40 border border-purple-400/30 rounded text-purple-200 hover:text-white text-[9px] font-semibold uppercase transition disabled:opacity-30 disabled:cursor-not-allowed"
+                        disabled>MAX</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="swapFromAmt" type="number" placeholder="0.00" min="0.01" step="0.01"
+                     oninput="updateSwapQuote()"
+                     class="bg-transparent flex-1 text-2xl font-mono focus:outline-none w-0 text-white placeholder-white/20">
+              <select id="swapFromToken" onchange="guardSameToken('from'); updateSwapQuote(); refreshSwapBalance()"
+                      class="bg-white/10 hover:bg-white/20 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none cursor-pointer shrink-0 border border-white/10">
+                <option value="USDC" selected>USDC</option>
+                <option value="EURC">EURC</option>
+                <option value="cirBTC">cirBTC</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Flip button -->
+          <div class="flex justify-center my-2">
+            <button onclick="flipSwap()" id="flipBtn"
+                    class="w-8 h-8 bg-white/10 hover:bg-purple-500/40 border border-white/10 hover:border-purple-400/50 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-90"
+                    title="Flip direction">
+              <!-- fa-arrows-up-down is valid in FA 6 free -->
+              <i class="fas fa-arrows-up-down text-purple-300 text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Receive box -->
+          <div class="bg-black/25 border border-white/10 rounded-2xl px-4 pt-3 pb-3">
+            <div class="text-[11px] text-purple-400 mb-1.5" data-i18n="swap_receive">You receive (est.)</div>
+            <div class="flex items-center gap-2">
+              <input id="swapToAmt" type="number" placeholder="0.00" readonly
+                     class="bg-transparent flex-1 text-2xl font-mono text-white/60 focus:outline-none w-0 placeholder-white/20">
+              <select id="swapToToken" onchange="guardSameToken('to'); updateSwapQuote()"
+                      class="bg-white/10 hover:bg-white/20 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none cursor-pointer shrink-0 border border-white/10">
+                <option value="USDC">USDC</option>
+                <option value="EURC" selected>EURC</option>
+                <option value="cirBTC">cirBTC</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-3 rounded-xl bg-black/20 border border-white/5 p-3 text-[11px] text-purple-300 space-y-1.5">
+            <div class="flex justify-between">
+              <span data-i18n="swap_rate_label">Est. rate</span>
+              <span id="swapRate" class="text-white/80 font-mono">1 USDC ≈ 0.9985 EURC</span>
+            </div>
+            <div class="flex justify-between">
+              <span data-i18n="swap_slippage">Slippage protection</span>
+              <span class="text-white/80">0.3%</span>
+            </div>
+          </div>
+
+          <button onclick="demoSwap()"
+                  class="mt-4 w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-2xl text-sm font-medium transition">
+            <span data-i18n="btn_swap">Execute Swap (Demo)</span>
+          </button>
+        </div>
+
+        <!-- ── Send Card ── -->
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-5 hover:bg-white/[0.11] hover:border-white/15 transition">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2 text-purple-300 text-xs font-semibold uppercase tracking-wide">
+              <i class="fas fa-paper-plane text-xs"></i>
+              Send
+            </div>
+            <span class="text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-400/20 px-2 py-0.5 rounded-full">4 chains</span>
+          </div>
+          <p class="text-[11px] text-purple-400/70 mb-4" data-i18n="send_subtitle">Same-chain ERC-20 USDC transfer</p>
+
+          <!-- Transfer path -->
+          <div class="bg-black/25 border border-white/10 rounded-2xl p-3 mb-3">
+            <div class="text-[10px] text-purple-400 mb-2 font-semibold uppercase tracking-wider" data-i18n="send_path">Transfer Path</div>
+            <div class="flex flex-col gap-1">
+              <!-- From -->
+              <div class="bg-white/5 rounded-xl px-3 py-2 border border-purple-500/30">
+                <div class="text-[10px] text-purple-400 mb-1" data-i18n="send_from">From</div>
+                <select id="sendChain" onchange="updateSendFlow(); refreshSendBalance(); updateSendGasEstimate()"
+                        class="bg-transparent w-full text-xs font-semibold focus:outline-none cursor-pointer text-white">
+                </select>
+              </div>
+              <!-- Arrow -->
+              <div class="flex justify-center py-0.5">
+                <i class="fas fa-arrow-down text-purple-400 text-[10px]"></i>
+              </div>
+              <!-- To -->
+              <div class="bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                <div class="text-[10px] text-purple-400 mb-1" data-i18n="send_to_label">To (same-chain)</div>
+                <div id="sendToLabel" class="text-xs font-semibold text-white/60">Arc Testnet</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2.5">
+            <div>
+              <div class="text-[11px] text-purple-300 mb-1" data-i18n="send_asset">Asset</div>
+              <select id="sendToken"
+                      class="w-full bg-black/25 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none text-white">
+                <option value="USDC">USDC</option>
+              </select>
+            </div>
+            <div>
+              <div class="text-[11px] text-purple-300 mb-1" data-i18n="send_address">Recipient Address</div>
+              <input id="sendAddress" type="text" placeholder="0x..."
+                     class="w-full bg-black/25 border border-white/10 hover:border-white/15 focus:border-purple-400/50 rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none transition text-white placeholder-white/20">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-[11px] text-purple-300" data-i18n="send_amount">Amount</div>
+                <div class="flex items-center gap-1.5 text-[10px]">
+                  <span class="text-purple-300/70" data-i18n="label_balance">Balance:</span>
+                  <span id="sendBalance" class="font-mono text-white/80">—</span>
+                  <button onclick="setMaxSend()" id="sendMaxBtn"
+                          class="px-1.5 py-0.5 bg-purple-500/20 hover:bg-purple-500/40 border border-purple-400/30 rounded text-purple-200 hover:text-white text-[9px] font-semibold uppercase transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          disabled>MAX</button>
+                </div>
+              </div>
+              <div class="relative">
+                <input id="sendAmount" type="number" placeholder="0.00" min="0.01" step="0.01" oninput="updateFeeRows()"
+                       class="w-full bg-black/25 border border-white/10 hover:border-white/15 focus:border-purple-400/50 rounded-xl pl-3 pr-14 py-2.5 text-xl font-mono focus:outline-none transition text-white placeholder-white/20">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-amber-300 font-semibold pointer-events-none">USDC</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gas + fee info -->
+          <div class="mt-3 bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-[10px] space-y-1">
+            <div class="flex justify-between">
+              <span class="text-purple-300/70"><i class="fas fa-bolt text-amber-400 mr-1"></i><span data-i18n="label_gas">Network fee</span></span>
+              <span id="sendGasEst" class="font-mono text-white/80">—</span>
+            </div>
+            <div id="sendFeeRow" class="hidden flex justify-between">
+              <span class="text-purple-300/70"><i class="fas fa-circle-dollar-to-slot text-purple-400 mr-1"></i><span data-i18n="label_creator_fee">Creator fee</span></span>
+              <span id="sendFeeAmt" class="font-mono text-amber-300">—</span>
+            </div>
+          </div>
+
+          <button onclick="demoSend()"
+                  class="mt-3 w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-2xl text-sm font-medium transition">
+            <span data-i18n="btn_send">Send (Demo)</span>
+          </button>
+        </div>
+
+        <!-- ── Unified Balance Card ── -->
+        <div class="bg-white/10 border border-white/10 rounded-3xl p-5 hover:bg-white/[0.11] hover:border-white/15 transition">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2 text-purple-300 text-xs font-semibold uppercase tracking-wide">
+              <i class="fas fa-layer-group text-xs"></i>
+              Unified Balance
+            </div>
+            <span class="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-400/20 px-2 py-0.5 rounded-full">Multi-chain</span>
+          </div>
+          <p class="text-[11px] text-purple-400/70 mb-4" data-i18n="ub_subtitle">Live USDC balance across all CCTP chains</p>
+
+          <!-- Notice -->
+          <div class="bg-amber-400/10 border border-amber-400/25 rounded-xl px-3 py-2.5 mb-4 text-[11px] text-amber-200/90 leading-relaxed">
+            <i class="fas fa-circle-exclamation mr-1 text-amber-400"></i>
+            <span data-i18n="ub_notice">Your USDC is scattered across chains. Bridge to Arc to use it in Swap & DeFi.</span>
+          </div>
+
+          <!-- Balance bars — populated dynamically from CHAINS config -->
+          <div id="ubBalanceList" class="space-y-3 mb-4">
+            <!-- placeholder rows shown until wallet connects -->
+            <div class="text-[11px] text-purple-400/70 text-center py-4">Connect wallet to see live balances across all chains</div>
+          </div>
+
+          <!-- Total: sum across all chains -->
+          <div class="flex justify-between items-center bg-black/25 border border-white/10 rounded-xl px-3 py-2.5 mb-4">
+            <div class="flex items-center gap-1.5 text-[11px] text-purple-300">
+              <i class="fas fa-circle-check text-emerald-400 text-[10px]"></i>
+              <span data-i18n="ub_available">Total USDC across all chains</span>
+            </div>
+            <span class="font-mono font-semibold text-emerald-300 text-sm" id="ubTotal">— USDC</span>
+          </div>
+
+          <button onclick="demoUnifiedBalance()"
+                  class="w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 rounded-2xl text-sm font-medium transition">
+            <span id="ubBtnLabel" data-i18n="btn_ub">Fetch Live Balances</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         HISTORY PANEL
+    ══════════════════════════════════════ -->
+    <div id="historyPanel" class="hidden">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-2xl font-semibold mb-1" data-i18n="history_title">Transaction History</h2>
+          <p class="text-purple-300/80 text-sm" data-i18n="history_subtitle">Last 50 actions on this device · stored locally</p>
+        </div>
+        <button onclick="if(confirm('Clear all local transaction history?')) clearHistory()"
+                class="text-xs px-4 py-2 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 rounded-xl text-white/70 hover:text-red-300 transition">
+          <span data-i18n="history_clear">Clear All</span>
+        </button>
+      </div>
+      <div id="historyList" class="space-y-2"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         AGENT PANEL — AI-powered cross-chain assistant
+    ══════════════════════════════════════ -->
+    <div id="agentPanel" class="hidden">
+      <div class="mb-5 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-2xl font-semibold mb-1 flex items-center gap-2">
+            <span class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">AI Agent</span>
+            <span class="text-[10px] bg-pink-500/20 text-pink-300 border border-pink-400/30 px-2 py-0.5 rounded-full font-semibold">BETA · Gemini-powered</span>
+          </h2>
+          <p class="text-purple-300/80 text-sm" data-i18n="agent_subtitle">
+            Talk to an AI agent. It plans, asks for confirmation, then executes real testnet transactions.
+          </p>
+        </div>
+        <button onclick="showAgentKeyModal()" id="agentKeyBtn"
+                class="text-xs px-3 py-2 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-white/70 hover:text-white transition flex items-center gap-1.5 relative">
+          <i class="fas fa-key text-[10px]"></i>
+          <span data-i18n="agent_btn_key">Gemini API Key</span>
+        </button>
+      </div>
+
+      <!-- Suggested prompts -->
+      <div class="mb-4">
+        <div class="text-[10px] text-purple-300 font-semibold uppercase tracking-wider mb-2" data-i18n="agent_examples">Try these</div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
+            Bridge 1 USDC from Sepolia to Arc
+          </button>
+          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
+            What's my balance on every chain?
+          </button>
+          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
+            Find the chain with the most USDC and move 50% to Arc
+          </button>
+          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-200 hover:text-white transition">
+            <i class="fas fa-rotate text-[10px] mr-1"></i> Do I have any stuck bridges? Resume them.
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat area -->
+      <div id="agentMessages" class="bg-black/30 border border-white/10 rounded-2xl p-4 mb-3 h-[420px] overflow-y-auto space-y-3">
+        <div class="text-center text-purple-300/50 text-sm py-12">
+          <i class="fas fa-sparkles text-2xl mb-2 block"></i>
+          <div data-i18n="agent_empty">Ask the agent anything about your testnet USDC.</div>
+          <div class="text-[11px] mt-1 text-purple-300/40">Connect wallet first to enable transactions.</div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="flex gap-2">
+        <input id="agentInput" type="text"
+               placeholder="Ask the agent…"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAgentMessage()}"
+               class="flex-1 bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-2xl px-4 py-3 text-sm font-medium focus:outline-none transition text-white placeholder-white/30">
+        <button onclick="sendAgentMessage()" id="agentSendBtn"
+                class="px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 rounded-2xl text-sm font-semibold transition shadow-lg shadow-purple-500/25 flex items-center gap-2">
+          <i class="fas fa-paper-plane text-xs"></i>
+          <span data-i18n="agent_send">Send</span>
+        </button>
+      </div>
+      <p class="text-[10px] text-purple-400/50 mt-2 text-center" data-i18n="agent_disclaimer">
+        AI may make mistakes. Every transaction requires your explicit approval. Testnet only.
+      </p>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         GEMINI API KEY MODAL
+    ══════════════════════════════════════ -->
+    <div id="agentKeyModal" onclick="if(event.target===this)hideAgentKeyModal()"
+         class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div onclick="event.stopImmediatePropagation()"
+           class="modal bg-[#1c0a35] border border-purple-400/25 rounded-3xl p-7 w-full max-w-md text-white shadow-2xl">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <i class="fas fa-key text-purple-400"></i>
+            <span>Gemini API Key</span>
+          </h3>
+          <button onclick="hideAgentKeyModal()" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/15 text-white/50 hover:text-white">
+            <i class="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+        <p class="text-[11px] text-purple-300/80 leading-relaxed mb-4">
+          Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-purple-300 underline">aistudio.google.com/app/apikey</a> (Google account required, generous free tier).<br>
+          Stored only in your browser. Used to power the AI Agent.
+        </p>
+        <input id="agentKeyInput" type="password" placeholder="AIza..."
+               class="w-full bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none transition text-white placeholder-white/20 mb-1.5">
+        <label class="flex items-center gap-2 text-[11px] text-purple-300/80 mb-4 cursor-pointer">
+          <input id="agentKeyShow" type="checkbox" onchange="toggleAgentKeyVisibility()" class="cursor-pointer">
+          <span>Show key</span>
+        </label>
+        <div class="flex gap-2">
+          <button onclick="clearAgentKey()"
+                  class="flex-1 py-2.5 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 rounded-xl text-xs text-white/70 hover:text-red-300 transition">Clear</button>
+          <button onclick="saveAgentKey()"
+                  class="flex-1 py-2.5 bg-purple-500 hover:bg-purple-400 rounded-xl text-xs font-semibold transition">Save</button>
+        </div>
+        <div id="agentKeyStatus" class="hidden mt-3 text-[11px] text-emerald-300 text-center"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PROGRESS PANEL
+    ══════════════════════════════════════ -->
+    <div id="progressPanel" class="hidden mt-8 bg-black/30 border border-white/10 rounded-3xl p-8">
+      <h3 class="text-xl font-semibold mb-8 flex items-center gap-3">
+        <span class="w-8 h-8 bg-purple-500/30 rounded-xl flex items-center justify-center">
+          <i class="fas fa-spinner animate-spin text-purple-300 text-sm"></i>
+        </span>
+        <span data-i18n="progress_title">CCTP Bridge in progress…</span>
+      </h3>
+      <div id="progressSteps" class="space-y-6"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         RESULT PANEL
+    ══════════════════════════════════════ -->
+    <div id="resultPanel" class="hidden mt-8 bg-gradient-to-br from-emerald-400/10 to-cyan-400/10 border border-emerald-400/40 rounded-3xl p-10 text-center">
+      <div class="w-16 h-16 bg-emerald-400/15 border border-emerald-400/30 rounded-2xl flex items-center justify-center mx-auto mb-5">
+        <i class="fas fa-check text-emerald-400 text-2xl"></i>
+      </div>
+      <h2 class="text-3xl font-semibold text-emerald-400" data-i18n="result_title">Bridge Successful</h2>
+      <p id="successText" class="text-lg text-white/80 mt-2.5 leading-relaxed"></p>
+      <div class="mt-5 inline-flex items-center gap-2 bg-emerald-400/10 border border-emerald-400/20 rounded-full px-5 py-2 text-sm text-emerald-300">
+        <i class="fas fa-bolt text-xs"></i>
+        <span data-i18n="result_time">Confirmation:</span>
+        <strong data-i18n="result_speed">Sub-second</strong>
+        <span class="text-emerald-400/60">(<span data-i18n="result_blocks">~1 block</span>)</span>
+      </div>
+      <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <button onclick="resetDemo()"
+                class="px-8 py-3 bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl font-medium transition">
+          <span data-i18n="btn_again">Bridge Again</span>
+        </button>
+        <button onclick="switchToDeFiAfterBridge()"
+                class="px-8 py-3 bg-emerald-400 hover:bg-emerald-300 text-black font-semibold rounded-2xl transition">
+          <i class="fas fa-arrow-right mr-2"></i>
+          <span data-i18n="btn_continue_defi">Continue to DeFi Actions</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center text-white/30 text-xs mt-10 pt-6 border-t border-white/10 space-y-1">
+      <div data-i18n="footer_main">Arc Bridge Kit Official Demo · Testnet only</div>
+      <div>
+        <span data-i18n="footer_sub">All DeFi actions are frontend demos ·</span>
+        <a href="https://docs.arc.network/app-kit/bridge" target="_blank" rel="noopener noreferrer"
+           class="text-purple-400 hover:text-purple-200 underline underline-offset-2 ml-1 transition" data-i18n="footer_docs">Real integration: see official docs</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       WALLET MODAL
+  ══════════════════════════════════════ -->
+  <div id="walletModal" onclick="if(event.target===this)hideWalletModal()"
+       class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div onclick="event.stopImmediatePropagation()"
+         class="modal bg-[#1c0a35] border border-purple-400/25 rounded-3xl p-8 w-full max-w-sm text-white shadow-2xl">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-semibold" data-i18n="modal_title">Connect Wallet</h3>
+        <button onclick="hideWalletModal()" class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 transition text-white/50 hover:text-white">
+          <i class="fas fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- MetaMask -->
+      <div onclick="connectMetaMask()"
+           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer mb-3 transition">
+        <!-- MetaMask fox SVG inline (simplified) -->
+        <div class="w-11 h-11 rounded-xl bg-[#f6851b]/15 border border-[#f6851b]/30 flex items-center justify-center shrink-0">
+          <svg width="22" height="22" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M35.9 2L21.4 12.6l2.6-6.2L35.9 2z" fill="#E17726"/>
+            <path d="M2.1 2l14.4 10.7-2.5-6.3L2.1 2z" fill="#E27625"/>
+            <path d="M30.7 26.2l-3.9 5.9 8.3 2.3 2.4-8.1-6.8-.1z" fill="#E27625"/>
+            <path d="M.5 26.3l2.3 8.1 8.3-2.3-3.9-5.9-6.7.1z" fill="#E27625"/>
+            <path d="M10.7 17l-2.3 3.5 8.2.4-.3-8.8-5.6 4.9z" fill="#E27625"/>
+            <path d="M27.3 17l-5.7-5-1.6 8.9 8.2-.4-2.9-3.5z" fill="#E27625"/>
+            <path d="M11.1 32.1l4.9-2.4-4.3-3.3-.6 5.7z" fill="#E27625"/>
+            <path d="M22 29.7l5 2.4-.7-5.7-4.3 3.3z" fill="#E27625"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm">MetaMask</div>
+          <div class="text-xs text-white/50 mt-0.5" data-i18n="wallet_metamask_sub">Browser extension</div>
+        </div>
+        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
+      </div>
+
+      <!-- WalletConnect -->
+      <div onclick="connectWalletConnect()"
+           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer mb-3 transition">
+        <div class="w-11 h-11 rounded-xl bg-[#3b99fc]/15 border border-[#3b99fc]/30 flex items-center justify-center shrink-0">
+          <i class="fas fa-qrcode text-[#3b99fc] text-lg"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm">WalletConnect</div>
+          <div class="text-xs text-white/50 mt-0.5" data-i18n="wallet_wc_sub">Scan with mobile wallet</div>
+        </div>
+        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
+      </div>
+
+      <!-- Other -->
+      <div onclick="connectOther()"
+           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer transition">
+        <div class="w-11 h-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
+          <i class="fas fa-ellipsis text-white/60 text-lg"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm" data-i18n="wallet_other">Other Wallets</div>
+          <div class="text-xs text-white/50 mt-0.5">Rainbow · OKX · Rabby …</div>
+        </div>
+        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       KIT KEY MODAL — stored in localStorage only, never in code
+  ══════════════════════════════════════ -->
+  <div id="kitKeyModal" onclick="if(event.target===this)hideKitKeyModal()"
+       class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div onclick="event.stopImmediatePropagation()"
+         class="modal bg-[#1c0a35] border border-purple-400/25 rounded-3xl p-7 w-full max-w-md text-white shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="fas fa-gear text-purple-400"></i>
+          <span data-i18n="kit_key_title">Circle Kit Key</span>
+        </h3>
+        <button onclick="hideKitKeyModal()" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/15 text-white/50 hover:text-white">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <div class="text-[11px] text-purple-300/80 leading-relaxed mb-4 space-y-1.5">
+        <p><span data-i18n="kit_key_desc1">Get yours from</span> <a href="https://console.circle.com" target="_blank" rel="noopener noreferrer" class="text-purple-300 underline">console.circle.com</a> <span data-i18n="kit_key_desc2">→ Keys → Create Kit Key.</span></p>
+        <p class="text-amber-300/90">⚠ <span data-i18n="kit_key_warn">Add domain whitelist in Console — anyone visiting your page can read this key.</span></p>
+        <p><span data-i18n="kit_key_storage">Stored only in your browser (localStorage), never in code.</span></p>
+      </div>
+
+      <label class="block text-[11px] text-purple-300 mb-1.5 font-semibold uppercase tracking-wider" data-i18n="kit_key_label">Kit Key</label>
+      <input id="kitKeyInput" type="password" placeholder="kit_test_xxxxxxxxxx:xxxxxxxxxx"
+             class="w-full bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none transition text-white placeholder-white/20 mb-1.5">
+      <label class="flex items-center gap-2 text-[11px] text-purple-300/80 mb-4 cursor-pointer">
+        <input id="kitKeyShow" type="checkbox" onchange="toggleKitKeyVisibility()" class="cursor-pointer">
+        <span data-i18n="kit_key_show">Show key</span>
+      </label>
+
+      <div class="flex gap-2">
+        <button onclick="clearKitKey()"
+                class="flex-1 py-2.5 bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-400/40 rounded-xl text-xs text-white/70 hover:text-red-300 transition">
+          <span data-i18n="kit_key_clear">Clear</span>
+        </button>
+        <button onclick="saveKitKey()"
+                class="flex-1 py-2.5 bg-purple-500 hover:bg-purple-400 rounded-xl text-xs font-semibold transition">
+          <span data-i18n="kit_key_save">Save</span>
+        </button>
+      </div>
+
+      <div id="kitKeyStatus" class="hidden mt-3 text-[11px] text-emerald-300 text-center"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       MONETIZATION MODAL — Creator fee on every Bridge / Send / Swap
+  ══════════════════════════════════════ -->
+  <div id="monModal" onclick="if(event.target===this)hideMonetizationModal()"
+       class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div onclick="event.stopImmediatePropagation()"
+         class="modal bg-[#1c0a35] border border-purple-400/25 rounded-3xl p-7 w-full max-w-md text-white shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="fas fa-circle-dollar-to-slot text-purple-400"></i>
+          <span data-i18n="mon_title">Creator Monetization</span>
+        </h3>
+        <button onclick="hideMonetizationModal()" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/15 text-white/50 hover:text-white">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <p class="text-[11px] text-purple-300/80 leading-relaxed mb-4" data-i18n="mon_desc">
+        Arc App Kit's built-in monetization: collect a small fee from every Bridge / Send / Swap as the dApp creator. Stored locally — testnet only.
+      </p>
+
+      <div class="flex items-center justify-between mb-4 bg-black/30 border border-white/10 rounded-xl px-4 py-3">
+        <label class="text-sm font-medium" for="monEnabled" data-i18n="mon_enable">Enable creator fee</label>
+        <input id="monEnabled" type="checkbox" onchange="updateMonUiState()"
+               class="w-10 h-5 appearance-none bg-white/10 rounded-full relative cursor-pointer checked:bg-purple-500 transition before:content-[''] before:absolute before:top-0.5 before:left-0.5 before:w-4 before:h-4 before:bg-white before:rounded-full before:transition checked:before:translate-x-5">
+      </div>
+
+      <div id="monFields" class="space-y-3 opacity-40 pointer-events-none transition-opacity">
+        <div>
+          <label class="block text-[11px] text-purple-300 mb-1.5 font-semibold uppercase tracking-wider" data-i18n="mon_fee_label">Fee rate (basis points)</label>
+          <div class="flex items-center gap-2">
+            <input id="monFeeBps" type="number" min="1" max="500" step="1" value="10" oninput="updateMonFeePct()"
+                   class="flex-1 bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-xl px-3 py-2 text-sm focus:outline-none transition text-white">
+            <span id="monFeePct" class="text-xs text-purple-300/80 font-mono shrink-0">= 0.10%</span>
+          </div>
+          <div class="text-[10px] text-purple-400/60 mt-1" data-i18n="mon_fee_hint">10 bps = 0.10% · 100 bps = 1% · max 500 bps (5%)</div>
+        </div>
+        <div>
+          <label class="block text-[11px] text-purple-300 mb-1.5 font-semibold uppercase tracking-wider" data-i18n="mon_addr_label">Fee recipient address</label>
+          <input id="monRecipient" type="text" placeholder="0x..."
+                 class="w-full bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none transition text-white placeholder-white/20">
+          <div class="text-[10px] text-purple-400/60 mt-1" data-i18n="mon_addr_hint">Fees will be transferred to this address before the main transfer</div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 mt-5">
+        <button onclick="hideMonetizationModal()"
+                class="flex-1 py-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-xs text-white/70 transition">
+          <span data-i18n="btn_cancel">Cancel</span>
+        </button>
+        <button onclick="saveMonetizationConfig()"
+                class="flex-1 py-2.5 bg-purple-500 hover:bg-purple-400 rounded-xl text-xs font-semibold transition">
+          <span data-i18n="kit_key_save">Save</span>
+        </button>
+      </div>
+
+      <div id="monStatus" class="hidden mt-3 text-[11px] text-emerald-300 text-center"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       BRIDGE CONFIRMATION MODAL — show breakdown + signature count before any wallet pop-up
+  ══════════════════════════════════════ -->
+  <div id="bridgeConfirmModal" onclick="if(event.target===this)resolveBridgeConfirm(false)"
+       class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div onclick="event.stopImmediatePropagation()"
+         class="modal bg-[#1c0a35] border border-purple-400/25 rounded-3xl p-6 w-full max-w-md text-white shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold flex items-center gap-2">
+          <i class="fas fa-arrow-right-arrow-left text-purple-400"></i>
+          <span data-i18n="bc_title">Confirm Bridge</span>
+        </h3>
+        <button onclick="resolveBridgeConfirm(false)" class="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/15 text-white/50 hover:text-white">
+          <i class="fas fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Route -->
+      <div class="bg-black/30 border border-white/10 rounded-2xl p-3.5 mb-3">
+        <div class="text-[10px] text-purple-300 font-semibold uppercase tracking-wider mb-2" data-i18n="bc_route">Route</div>
+        <div class="flex items-center justify-between text-sm">
+          <span id="bcFromChain" class="font-medium">—</span>
+          <i class="fas fa-arrow-right text-purple-400 text-xs"></i>
+          <span id="bcToChain" class="font-medium">—</span>
+        </div>
+      </div>
+
+      <!-- Amount breakdown -->
+      <div class="bg-black/30 border border-white/10 rounded-2xl p-3.5 mb-3 text-[12px] space-y-1.5">
+        <div class="text-[10px] text-purple-300 font-semibold uppercase tracking-wider mb-2" data-i18n="bc_breakdown">Amount</div>
+        <div class="flex justify-between">
+          <span class="text-purple-200/70" data-i18n="bc_total_input">Total input</span>
+          <span id="bcTotalIn" class="font-mono text-white/90">—</span>
+        </div>
+        <div id="bcFeeRow" class="hidden flex justify-between">
+          <span class="text-amber-300/80" data-i18n="bc_creator_fee">Creator fee</span>
+          <span id="bcFeeAmt" class="font-mono text-amber-300">—</span>
+        </div>
+        <div class="flex justify-between font-semibold pt-1.5 border-t border-white/10">
+          <span class="text-emerald-300/90" data-i18n="bc_recipient_gets">Recipient gets</span>
+          <span id="bcRecipientGets" class="font-mono text-emerald-300">—</span>
+        </div>
+      </div>
+
+      <!-- Signature count -->
+      <div class="bg-black/30 border border-white/10 rounded-2xl p-3.5 mb-3 text-[12px]">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[10px] text-purple-300 font-semibold uppercase tracking-wider" data-i18n="bc_signatures">Wallet signatures required</div>
+          <span id="bcSigCount" class="text-base font-mono text-purple-300 font-bold">—</span>
+        </div>
+        <ul id="bcSigList" class="space-y-1 text-[11px] text-purple-200/80"></ul>
+      </div>
+
+      <!-- Warning when fee enabled -->
+      <div id="bcFeeWarn" class="hidden bg-amber-500/10 border border-amber-400/30 rounded-xl px-3 py-2 mb-3 text-[11px] text-amber-200/90 leading-snug">
+        <i class="fas fa-triangle-exclamation text-amber-400 mr-1"></i>
+        <span data-i18n="bc_fee_warn">The creator fee is sent first as a separate transaction. If you cancel any later step, the fee will NOT be refunded automatically.</span>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="resolveBridgeConfirm(false)"
+                class="flex-1 py-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-xs text-white/70 transition">
+          <span data-i18n="btn_cancel">Cancel</span>
+        </button>
+        <button onclick="resolveBridgeConfirm(true)"
+                class="flex-1 py-3 bg-purple-500 hover:bg-purple-400 rounded-xl text-sm font-semibold transition">
+          <i class="fas fa-arrow-right mr-1"></i>
+          <span data-i18n="bc_confirm">Confirm &amp; Start</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       JAVASCRIPT
+  ══════════════════════════════════════ -->
+  <script>
+  // ─────────────────────────────────────────────
+  // Inline SVG icons — no CDN dependency, works offline
+  // ─────────────────────────────────────────────
+  const ICON_SVG = {
+    'arrow-down':   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+    'arrow-right':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>',
+    'arrow-right-arrow-left': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h14M14 4l3 3-3 3M21 17H7M10 14l-3 3 3 3"/></svg>',
+    'arrows-up-down': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V3M4 6l3-3 3 3M17 3v18M14 18l3 3 3-3"/></svg>',
+    'bolt':         '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 1 4 14h7v9l9-13h-7V1z"/></svg>',
+    'check':        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+    'check-circle': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>',
+    'circle-check': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>',
+    'chevron-right':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+    'circle-dot':   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>',
+    'circle-exclamation': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>',
+    'circle-nodes':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="2"/><circle cx="5" cy="17" r="2"/><circle cx="19" cy="17" r="2"/><circle cx="12" cy="14" r="2"/><path d="M12 8v4M10.5 15l-4 1M13.5 15l4 1"/></svg>',
+    'circle-xmark': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>',
+    'circle-dollar-to-slot':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 9v8M14 11h-3a1.5 1.5 0 100 3h2a1.5 1.5 0 010 3H9M9 4h6"/></svg>',
+    'ellipsis':     '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+    'gear':         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
+    'sparkles':     '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2zm6 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/></svg>',
+    'key':          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.5 12.5L20 3M16 7l3 3M14 9l3 3"/></svg>',
+    'robot':        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg>',
+    'user-circle':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.7a8 8 0 0110 0"/></svg>',
+    'faucet':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h6M6 9v3M2 12h8v3a3 3 0 003 3M13 12V9a3 3 0 013-3h2a3 3 0 013 3M13 21h8"/></svg>',
+    'layer-group':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+    'link':         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5"/></svg>',
+    'paper-plane':  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>',
+    'qrcode':       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm-2 8h8v8H3v-8zm2 2v4h4v-4H5zm8-12h8v8h-8V3zm2 2v4h4V5h-4zm-2 8h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm2 2h2v2h-2v-2zm2-6h2v2h-2v-2zm0 4h2v2h-2v-2zm2-4h2v2h-2v-2zm0 4h2v2h-2v-2zm0 4h2v-2h-2v2z"/></svg>',
+    'spinner':      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" opacity=".7"/></svg>',
+    'triangle-exclamation': '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm1 16h-2v-2h2v2zm0-4h-2v-5h2v5z"/></svg>',
+    'wallet':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>',
+    'x-twitter':    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817-5.97 6.817H1.674L9.4 13.13 1.254 2.25h6.83l4.713 6.231 5.447-6.231zm-1.16 17.52h1.833L7.084 4.126H5.117L17.084 19.77z"/></svg>',
+    'xmark':        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  };
+
+  function renderIcons(root) {
+    (root || document).querySelectorAll('i[class*="fa-"]').forEach(el => {
+      if (el.dataset.svgRendered === '1') return;
+      let name = null;
+      for (const cls of el.classList) {
+        if (cls.startsWith('fa-') && !['fa-solid','fa-brands','fa-regular'].includes(cls)) {
+          name = cls.slice(3); break;
+        }
+      }
+      if (!name) return;
+      const svg = ICON_SVG[name];
+      if (!svg) return;
+      el.innerHTML = svg;
+      el.dataset.svgRendered = '1';
+      if (name === 'spinner') el.style.animation = 'spin 1s linear infinite';
+    });
+  }
+
+  // Spinner keyframe (injected at runtime)
+  (function(){
+    const s = document.createElement('style');
+    s.textContent = '@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }';
+    document.head.appendChild(s);
+  })();
+
+  // ═══════════════════════════════════════════════════════
+  // REAL WEB3 — chain configs, network add, balance, transfer, CCTP
+  // ═══════════════════════════════════════════════════════
+
+  // ─── Circle Console Kit Key ───
+  // Kit Key is NEVER hardcoded here. Stored in browser localStorage only.
+  // 1. Get yours from https://console.circle.com (testnet mode → Keys → Create Kit Key)
+  // 2. Restrict by domain whitelist in the Console (essential — anyone visiting your page can see the key)
+  // 3. Click the gear icon in the page to paste it (stored in your browser only)
+  // 4. To clear: open DevTools Console and run: localStorage.removeItem('circle_kit_key')
+  let CIRCLE_KIT_KEY = '';
+  try { CIRCLE_KIT_KEY = localStorage.getItem('circle_kit_key') || ''; } catch(e) {}
+  function setKitKey(value) {
+    CIRCLE_KIT_KEY = (value || '').trim();
+    try {
+      if (CIRCLE_KIT_KEY) localStorage.setItem('circle_kit_key', CIRCLE_KIT_KEY);
+      else localStorage.removeItem('circle_kit_key');
+    } catch(e) {}
+  }
+
+  // ─── CCTP V2 shared addresses (same across all testnet chains via CREATE2 deterministic deploy) ───
+  const CCTP_V2_TESTNET = {
+    tokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
+    messageTransmitter: '0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275',
+  };
+
+  const CHAINS = {
+    // ── Featured (the original demo subject) ──
+    arc: {
+      key: 'arc',
+      chainId: 5042002,
+      chainIdHex: '0x4cef52',                     // 5042002 in hex (verified)
+      name: 'Arc Testnet',
+      shortName: 'Arc',
+      sdkId: 'Arc_Testnet',
+      rpcUrl: 'https://rpc.testnet.arc.network',
+      explorer: 'https://testnet.arcscan.app',
+      nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+      usdcAddress: '0x3600000000000000000000000000000000000000',
+      usdcDecimals: 6,
+      cctpDomain: 26,
+      cctpTokenMessenger: CCTP_V2_TESTNET.tokenMessenger,
+      cctpMessageTransmitter: CCTP_V2_TESTNET.messageTransmitter,
+      featured: true,
+    },
+    // NOTE: Pharos is temporarily disabled in this demo because the public RPC
+    //       (testnet.dplabs-internal.com) was unstable during development.
+    //       Circle officially announced CCTP V2 support for Pharos on April 28, 2026:
+    //       https://www.circle.com/blog/now-available-usdc-cctp-on-pharos
+    //       To re-enable: add a `pharos: {...}` block here AND wire up an RPC health
+    //       check (eth_chainId ping on page load) so we can mark it Unavailable if down.
+
+    // ── Ecosystem testnets ──
+    sepolia: {
+      key: 'sepolia',
+      chainId: 11155111,
+      chainIdHex: '0xaa36a7',
+      name: 'Ethereum Sepolia',
+      shortName: 'Sepolia',
+      sdkId: 'Ethereum_Sepolia',
+      rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+      explorer: 'https://sepolia.etherscan.io',
+      nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+      usdcAddress: '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238',
+      usdcDecimals: 6,
+      cctpDomain: 0,
+      cctpTokenMessenger: CCTP_V2_TESTNET.tokenMessenger,
+      cctpMessageTransmitter: CCTP_V2_TESTNET.messageTransmitter,
+    },
+    baseSepolia: {
+      key: 'baseSepolia',
+      chainId: 84532,
+      chainIdHex: '0x14a34',
+      name: 'Base Sepolia',
+      shortName: 'Base Sepolia',
+      sdkId: 'Base_Sepolia',
+      rpcUrl: 'https://sepolia.base.org',
+      explorer: 'https://sepolia.basescan.org',
+      nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+      usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      usdcDecimals: 6,
+      cctpDomain: 6,
+      cctpTokenMessenger: CCTP_V2_TESTNET.tokenMessenger,
+      cctpMessageTransmitter: CCTP_V2_TESTNET.messageTransmitter,
+    },
+    arbSepolia: {
+      key: 'arbSepolia',
+      chainId: 421614,
+      chainIdHex: '0x66eee',
+      name: 'Arbitrum Sepolia',
+      shortName: 'Arb Sepolia',
+      sdkId: 'Arbitrum_Sepolia',
+      rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
+      explorer: 'https://sepolia.arbiscan.io',
+      nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+      usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+      usdcDecimals: 6,
+      cctpDomain: 3,
+      cctpTokenMessenger: CCTP_V2_TESTNET.tokenMessenger,
+      cctpMessageTransmitter: CCTP_V2_TESTNET.messageTransmitter,
+    },
+  };
+
+  // Helpers
+  const CHAIN_KEYS = Object.keys(CHAINS);
+
+  // Safety net: overwrite any manually-typed chainIdHex with the correct value
+  // derived from chainId. Prevents accidental mismatches like 0x4cf392 vs 0x4cef52.
+  for (const k of CHAIN_KEYS) {
+    CHAINS[k].chainIdHex = '0x' + CHAINS[k].chainId.toString(16);
+  }
+
+  function chainOptionsHTML(selectedKey) {
+    return CHAIN_KEYS.map(k =>
+      `<option value="${k}"${k===selectedKey?' selected':''}>${CHAINS[k].name}${CHAINS[k].featured?' ★':''}</option>`
+    ).join('');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // FEATURE MODULES: Monetization · Tx History · Gas Estimation
+  // ═══════════════════════════════════════════════════════
+
+  // ── Built-in Monetization (Arc App Kit signature feature) ───
+  // When enabled, the dApp creator collects a configurable fee from every
+  // Bridge/Send/Swap transaction. Persisted in localStorage so settings survive reload.
+  const MONETIZATION_DEFAULTS = { enabled: false, feeBps: 10, recipient: '' }; // 10 bps = 0.1%
+  let MONETIZATION = (() => {
+    try { return { ...MONETIZATION_DEFAULTS, ...JSON.parse(localStorage.getItem('monetization') || '{}') }; }
+    catch { return { ...MONETIZATION_DEFAULTS }; }
+  })();
+  function saveMonetization() {
+    try { localStorage.setItem('monetization', JSON.stringify(MONETIZATION)); } catch {}
+  }
+  function getFeeAmount(amountStr) {
+    if (!MONETIZATION.enabled || !MONETIZATION.recipient || !MONETIZATION.feeBps) return null;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(MONETIZATION.recipient)) return null;
+    const amt = parseFloat(amountStr);
+    if (!amt || amt <= 0) return null;
+    const feeUsdc = amt * MONETIZATION.feeBps / 10000;
+    if (feeUsdc <= 0) return null;
+    return { feeUsdc, netUsdc: amt - feeUsdc, recipient: MONETIZATION.recipient, bps: MONETIZATION.feeBps };
+  }
+
+  // ── Transaction History (localStorage only — testnet receipts) ───
+  const TX_HISTORY_KEY = 'tx_history_v1';
+  const MAX_HISTORY = 50;
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(TX_HISTORY_KEY) || '[]'); } catch { return []; }
+  }
+  function recordTx(entry) {
+    // entry: { type, fromChain, toChain?, amount, token, hash, explorerUrl, status, fee? }
+    const list = loadHistory();
+    list.unshift({
+      ...entry,
+      ts: Date.now(),
+      account: account || null,
+    });
+    if (list.length > MAX_HISTORY) list.length = MAX_HISTORY;
+    try { localStorage.setItem(TX_HISTORY_KEY, JSON.stringify(list)); } catch {}
+    renderHistoryIfVisible();
+  }
+  function clearHistory() {
+    try { localStorage.removeItem(TX_HISTORY_KEY); } catch {}
+    renderHistoryIfVisible();
+  }
+  function renderHistoryIfVisible() {
+    const panel = document.getElementById('historyPanel');
+    if (!panel || panel.classList.contains('hidden')) return;
+    renderHistory();
+  }
+  // Small HTML-escape helper: defensive against ever loading polluted localStorage
+  function escHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[c]));
+  }
+  // URL escape: blocks javascript: URIs; only allows http/https; otherwise empty.
+  function safeUrl(value) {
+    const s = String(value ?? '').trim();
+    if (!/^https?:\/\//i.test(s)) return '';
+    return escHtml(s);
+  }
+  // Format USDC amount for display: keep up to 6 decimals, trim trailing zeros.
+  // Avoids "0.00 USDC" when user tests with small amounts like 0.001 USDC.
+  function fmtAmount(value) {
+    const n = Number(value);
+    if (!isFinite(n)) return '0';
+    return n.toFixed(6).replace(/\.?0+$/, '') || '0';
+  }
+
+  function renderHistory() {
+    const container = document.getElementById('historyList');
+    if (!container) return;
+    const list = loadHistory().filter(e => !account || !e.account || e.account.toLowerCase() === account.toLowerCase());
+    if (list.length === 0) {
+      container.innerHTML = `<div class="text-center text-purple-400/70 text-sm py-12" data-i18n="history_empty">${escHtml(t('history_empty'))}</div>`;
+      return;
+    }
+    const typeColor = { bridge: 'purple', send: 'cyan', swap: 'amber', fee: 'amber' };
+    container.innerHTML = list.map(e => {
+      const safeType = typeColor[e.type] ? e.type : 'bridge'; // only allow known types in CSS
+      const color = typeColor[safeType];
+      const ago = formatTimeAgo(e.ts);
+      const fromName = e.fromChain ? (CHAINS[e.fromChain]?.shortName || e.fromChain) : '';
+      const toName   = e.toChain   ? (CHAINS[e.toChain]?.shortName   || e.toChain)   : '';
+      const route = e.toChain && e.toChain !== e.fromChain ? `${fromName} → ${toName}` : fromName;
+      let statusBadge;
+      if (e.status === 'failed') {
+        statusBadge = `<span class="text-[10px] bg-red-500/20 text-red-300 border border-red-400/30 px-1.5 py-0.5 rounded">${escHtml(t('history_status_failed'))}</span>`;
+      } else if (e.status === 'burned_waiting_mint') {
+        statusBadge = `<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-1.5 py-0.5 rounded animate-pulse">${escHtml(t('history_status_pending_mint'))}</span>`;
+      } else if (e.status === 'pending') {
+        statusBadge = `<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-1.5 py-0.5 rounded">${escHtml(t('history_status_pending'))}</span>`;
+      } else {
+        statusBadge = `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded">${escHtml(t('history_status_ok'))}</span>`;
+      }
+      const feeRow = e.feeUsdc
+        ? `<div class="text-[10px] text-amber-300/70 mt-0.5">${escHtml(t('history_creator_fee'))}: ${escHtml(parseFloat(e.feeUsdc).toFixed(4))} ${escHtml(e.token || 'USDC')}</div>`
+        : '';
+      const resumeBtn = e.status === 'burned_waiting_mint'
+        ? `<button data-burn-hash="${escHtml(e.hash)}" onclick="handleResumeMint(this.dataset.burnHash, this)" class="mt-2 w-full py-1.5 bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-400/40 hover:border-emerald-400/70 rounded-lg text-[11px] font-semibold text-emerald-200 hover:text-white transition">
+            <i class="fas fa-rotate text-[10px] mr-1"></i> ${escHtml(t('history_resume_mint'))}
+          </button>` : '';
+      const safeExplorer = safeUrl(e.explorerUrl);
+      const safeDestExplorer = safeUrl(e.destExplorerUrl);
+      const safeHash = escHtml(e.hash || '');
+      const mintLink = safeDestExplorer
+        ? `<a href="${safeDestExplorer}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-emerald-300/80 hover:text-emerald-200 underline mt-1 inline-block ml-2">${escHtml(t('history_mint_tx'))} ↗</a>` : '';
+      const explorerLink = safeExplorer
+        ? `<a href="${safeExplorer}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-purple-300 hover:text-white underline mt-1 inline-block">${safeHash ? safeHash.slice(0,10)+'…'+safeHash.slice(-8) : escHtml(t('history_view_explorer'))} ↗</a>`
+        : '';
+      return `
+        <div class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3.5 py-3 transition">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <span class="text-[10px] bg-${color}-500/20 text-${color}-300 border border-${color}-400/30 px-1.5 py-0.5 rounded font-semibold uppercase">${escHtml(safeType)}</span>
+              <span class="text-xs text-white/80 font-medium truncate">${escHtml(route)}</span>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="font-mono text-white/90">${escHtml(e.amount)} ${escHtml(e.token || 'USDC')}</span>
+            <span class="text-purple-300/60">${ago}</span>
+          </div>
+          ${feeRow}
+          ${explorerLink}
+          ${mintLink}
+          ${resumeBtn}
+        </div>`;
+    }).join('');
+  }
+
+  // Resume Mint button handler — guides user through completing a stuck bridge
+  async function handleResumeMint(burnHash, btnEl) {
+    if (!account) {
+      alert(t('alert_connect_wallet'));
+      showWalletModal();
+      return;
+    }
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = `<i class="fas fa-spinner animate-spin text-[10px] mr-1"></i> ${t('history_resuming')}`; }
+    try {
+      const result = await resumeMint(burnHash);
+      if (result.success) {
+        alert(`✓ ${t('history_resume_ok')}\n\n${result.explorer}`);
+      } else if (result.error === 'attestation_pending') {
+        alert(`⏳ ${result.message}`);
+      } else if (result.error === 'already_completed') {
+        alert(`✓ ${t('history_resume_already_done')}`);
+      } else if (result.error === 'destination_gas') {
+        // assertDestinationGas already built a complete, helpful message
+        alert(`⛽ ${result.message}`);
+      } else {
+        alert(`❌ ${result.message || result.error}`);
+      }
+    } catch (e) {
+      alert(`❌ ${e?.message || e}`);
+    } finally {
+      renderHistory();
+    }
+  }
+  function formatTimeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // AI AGENT MODULE (Gemini function calling)
+  // ═══════════════════════════════════════════════════════
+  let GEMINI_API_KEY = '';
+  try { GEMINI_API_KEY = localStorage.getItem('gemini_api_key') || ''; } catch {}
+  function setGeminiKey(v) {
+    GEMINI_API_KEY = (v || '').trim();
+    try {
+      if (GEMINI_API_KEY) localStorage.setItem('gemini_api_key', GEMINI_API_KEY);
+      else localStorage.removeItem('gemini_api_key');
+    } catch {}
+    updateAgentKeyDot();
+  }
+  function updateAgentKeyDot() {
+    const btn = document.getElementById('agentKeyBtn');
+    if (!btn) return;
+    let dot = btn.querySelector('.agent-key-dot');
+    if (GEMINI_API_KEY) {
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = 'agent-key-dot absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full';
+        btn.appendChild(dot);
+      }
+    } else if (dot) dot.remove();
+  }
+
+  // Gemini API Key modal
+  function showAgentKeyModal() {
+    document.getElementById('agentKeyInput').value = GEMINI_API_KEY || '';
+    document.getElementById('agentKeyStatus').classList.add('hidden');
+    document.getElementById('agentKeyModal').classList.remove('hidden');
+  }
+  function hideAgentKeyModal() { document.getElementById('agentKeyModal').classList.add('hidden'); }
+  function toggleAgentKeyVisibility() {
+    const input = document.getElementById('agentKeyInput');
+    input.type = document.getElementById('agentKeyShow').checked ? 'text' : 'password';
+  }
+  function saveAgentKey() {
+    setGeminiKey(document.getElementById('agentKeyInput').value);
+    const s = document.getElementById('agentKeyStatus');
+    s.textContent = GEMINI_API_KEY ? '✓ Saved' : '✓ Cleared';
+    s.className = 'mt-3 text-[11px] text-emerald-300 text-center';
+    setTimeout(() => hideAgentKeyModal(), 1000);
+  }
+  function clearAgentKey() {
+    setGeminiKey('');
+    document.getElementById('agentKeyInput').value = '';
+    const s = document.getElementById('agentKeyStatus');
+    s.textContent = '✓ Cleared';
+    s.className = 'mt-3 text-[11px] text-amber-300 text-center';
+  }
+
+  // Conversation history sent to Gemini each turn
+  let agentMessages = [];
+
+  // Tool schema exposed to Gemini (Function Calling)
+  const AGENT_TOOLS = [
+    {
+      name: 'get_balances',
+      description: 'Get the user\'s USDC balance on every supported chain (Arc, Sepolia, Base Sepolia, Arbitrum Sepolia). Returns a JSON object mapping chain key to balance in USDC.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    },
+    {
+      name: 'bridge_usdc',
+      description: 'Bridge USDC from one chain to another using CCTP V2 (real on-chain transaction). The transaction requires the user to sign in MetaMask. The full flow takes 30-60 seconds.',
+      parameters: {
+        type: 'object',
+        properties: {
+          from_chain: { type: 'string', enum: ['arc','sepolia','baseSepolia','arbSepolia'], description: 'Source chain key' },
+          to_chain:   { type: 'string', enum: ['arc','sepolia','baseSepolia','arbSepolia'], description: 'Destination chain key' },
+          amount:     { type: 'number', description: 'Amount of USDC to bridge (e.g. 1.5)' },
+        },
+        required: ['from_chain', 'to_chain', 'amount']
+      }
+    },
+    {
+      name: 'send_usdc',
+      description: 'Send USDC on a single chain to a recipient address. Same-chain transfer only (no bridging).',
+      parameters: {
+        type: 'object',
+        properties: {
+          chain:     { type: 'string', enum: ['arc','sepolia','baseSepolia','arbSepolia'] },
+          to:        { type: 'string', description: 'Recipient EVM address (0x...)' },
+          amount:    { type: 'number', description: 'Amount of USDC' },
+        },
+        required: ['chain', 'to', 'amount']
+      }
+    },
+    {
+      name: 'get_wallet_info',
+      description: 'Get the user\'s currently connected wallet address and the chain they\'re connected to.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    },
+    {
+      name: 'get_pending_bridges',
+      description: 'List all CCTP bridges that have burned source-chain USDC but not yet completed the destination-chain mint. These are recoverable: the funds are safe and only need a single final mint transaction.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    },
+    {
+      name: 'resume_mint',
+      description: 'Complete a stuck CCTP bridge by re-polling attestation and calling receiveMessage on destination. Use this when get_pending_bridges shows entries. The user must sign one transaction in MetaMask.',
+      parameters: {
+        type: 'object',
+        properties: {
+          burn_hash: { type: 'string', description: 'The source-chain burn tx hash from a burned_waiting_mint history entry' },
+        },
+        required: ['burn_hash']
+      }
+    },
+  ];
+
+  // System prompt — defines agent personality and rules
+  const AGENT_SYSTEM_PROMPT = `You are an AI agent embedded in a cross-chain USDC dApp built on Arc Testnet. You help users move and manage stablecoins across 4 testnets (Arc, Sepolia, Base Sepolia, Arbitrum Sepolia) using Circle's CCTP V2 protocol.
+
+Capabilities you have via tools:
+- get_balances: read user's USDC across all chains
+- bridge_usdc: cross-chain USDC transfer (Arc/Sepolia/Base/Arb Sepolia)
+- send_usdc: same-chain USDC transfer
+- get_wallet_info: see the user's wallet address
+- get_pending_bridges: list any CCTP bridges where burn succeeded but mint is still pending (recoverable, funds safe)
+- resume_mint: complete a stuck bridge by re-polling attestation and minting on destination
+
+Behavior rules:
+1. **Plan before acting.** When asked to do something, first say what you'll do, then call the tool.
+2. **Never invent balances or addresses.** Always call get_balances or get_wallet_info first if needed.
+3. **Be concise.** Skip greetings. Get to the point.
+4. **Testnet only.** Remind the user this is testnet if they confuse it with mainnet.
+5. **If amount > balance, refuse and suggest a smaller amount.**
+6. **For multi-step plans, explain each step before executing.** Example: "I'll first check your balances, then bridge from the chain with the highest balance."
+7. **All transactions require user wallet signature** — you can't bypass that.
+8. **If user mentions a stuck bridge or "pending"**, first call get_pending_bridges to list them, then offer resume_mint for the relevant entry.
+
+Always respond in the language the user wrote in.`;
+
+  function useAgentPrompt(text) {
+    document.getElementById('agentInput').value = text;
+    document.getElementById('agentInput').focus();
+  }
+
+  function agentRenderMessage(role, content, isHtml = false) {
+    const container = document.getElementById('agentMessages');
+    // clear empty-state on first message
+    if (agentMessages.length === 0 && !container.querySelector('.agent-msg')) {
+      container.innerHTML = '';
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'agent-msg flex gap-2.5 ' + (role === 'user' ? 'justify-end' : '');
+    const bubble = document.createElement('div');
+    const isUser = role === 'user';
+    bubble.className = isUser
+      ? 'max-w-[80%] bg-purple-500/20 border border-purple-400/30 rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-sm text-white leading-relaxed'
+      : role === 'system'
+      ? 'max-w-[90%] bg-amber-500/10 border border-amber-400/30 rounded-2xl px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed'
+      : 'max-w-[85%] bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm text-white/90 leading-relaxed';
+    if (isHtml) bubble.innerHTML = content; else bubble.textContent = content;
+    if (role !== 'user' && role !== 'system') {
+      const icon = document.createElement('div');
+      icon.className = 'w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0 mt-0.5';
+      icon.innerHTML = '<i class="fas fa-sparkles text-white text-[10px]"></i>';
+      wrap.appendChild(icon);
+      renderIcons(icon);
+    }
+    wrap.appendChild(bubble);
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+    return bubble;
+  }
+
+  function agentShowTyping() {
+    const c = document.getElementById('agentMessages');
+    const wrap = document.createElement('div');
+    wrap.id = 'agentTyping';
+    wrap.className = 'agent-msg flex gap-2.5';
+    wrap.innerHTML = `
+      <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0 mt-0.5">
+        <i class="fas fa-sparkles text-white text-[10px]"></i>
+      </div>
+      <div class="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm text-white/60 italic">Thinking…</div>`;
+    c.appendChild(wrap);
+    c.scrollTop = c.scrollHeight;
+    renderIcons(wrap);
+  }
+  function agentHideTyping() {
+    const t = document.getElementById('agentTyping');
+    if (t) t.remove();
+  }
+
+  async function sendAgentMessage() {
+    const input = document.getElementById('agentInput');
+    const text = input.value.trim();
+    if (!text) return;
+    if (!GEMINI_API_KEY) {
+      agentRenderMessage('system', '⚙ Set your Gemini API key first — click "Gemini API Key" button above.');
+      showAgentKeyModal();
+      return;
+    }
+    input.value = '';
+    agentRenderMessage('user', text);
+    agentMessages.push({ role: 'user', parts: [{ text }] });
+    document.getElementById('agentSendBtn').disabled = true;
+    agentShowTyping();
+    try {
+      await agentLoop();
+    } catch (e) {
+      agentHideTyping();
+      agentRenderMessage('system', `⚠ Agent error: ${e?.message || e}`);
+      console.error('Agent error:', e);
+    } finally {
+      document.getElementById('agentSendBtn').disabled = false;
+    }
+  }
+
+  // The core agent loop: call Gemini → if it requests a tool, execute it → loop until model returns plain text
+  async function agentLoop(maxIters = 6) {
+    for (let i = 0; i < maxIters; i++) {
+      const response = await callGemini(agentMessages);
+      const candidate = response.candidates?.[0];
+      if (!candidate) throw new Error('No response from Gemini');
+      const parts = candidate.content?.parts || [];
+
+      // Append model response to history
+      agentMessages.push({ role: 'model', parts });
+
+      // Process each part: text or function call
+      const functionCalls = parts.filter(p => p.functionCall);
+      const textParts = parts.filter(p => p.text);
+
+      // Show any text from the model
+      for (const tp of textParts) {
+        agentHideTyping();
+        agentRenderMessage('assistant', tp.text);
+      }
+
+      // If no tool calls, conversation turn is done
+      if (functionCalls.length === 0) return;
+
+      // Execute each tool call (sequential — sometimes the model batches them)
+      const functionResponses = [];
+      for (const fc of functionCalls) {
+        agentHideTyping();
+        // Show what the agent is about to do
+        agentRenderMessage('system',
+          `🔧 Calling <code class="bg-black/30 px-1.5 py-0.5 rounded text-pink-300">${fc.functionCall.name}(${JSON.stringify(fc.functionCall.args || {})})</code>`,
+          true);
+        agentShowTyping();
+        let result;
+        try {
+          result = await executeAgentTool(fc.functionCall.name, fc.functionCall.args || {});
+        } catch (e) {
+          result = { error: e?.message || String(e) };
+        }
+        functionResponses.push({
+          functionResponse: { name: fc.functionCall.name, response: { content: result } }
+        });
+      }
+
+      // Send tool results back to Gemini and loop
+      agentMessages.push({ role: 'user', parts: functionResponses });
+    }
+    agentHideTyping();
+    agentRenderMessage('system', '⚠ Agent reached max iterations.');
+  }
+
+  async function callGemini(history, attempt = 0) {
+    // Model selection: gemini-2.5-flash gives the best balance of capability + free-tier limits.
+    // (gemini-2.0-flash was deprecated by Google on March 3, 2026.)
+    // gemini-2.5-flash-lite is even faster/cheaper but weaker at tool-call planning.
+    const MODEL = 'gemini-2.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    const body = {
+      contents: history,
+      systemInstruction: { parts: [{ text: AGENT_SYSTEM_PROMPT }] },
+      tools: [{ functionDeclarations: AGENT_TOOLS }],
+      generationConfig: { temperature: 0.2 },
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      // 429 = rate limit. Retry once after a 5-second wait — handles burst limits.
+      if (res.status === 429 && attempt < 1) {
+        agentHideTyping();
+        agentRenderMessage('system', '⏳ Rate limited by Gemini. Retrying in 5s…');
+        agentShowTyping();
+        await new Promise(r => setTimeout(r, 5000));
+        return callGemini(history, attempt + 1);
+      }
+      // Friendlier 429 message after the retry too fails
+      if (res.status === 429) {
+        throw new Error(
+          'Gemini API rate limit. Free tier allows 15 requests/min, 1000/day. ' +
+          'Wait ~1 min and try again. Or check your quota at aistudio.google.com.'
+        );
+      }
+      if (res.status === 400 && /API key/i.test(errText)) {
+        throw new Error('Invalid Gemini API key. Click "Gemini API Key" to update it.');
+      }
+      if (res.status === 403) {
+        throw new Error('Gemini API forbidden (403). Check your key has the Generative Language API enabled.');
+      }
+      throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`);
+    }
+    return res.json();
+  }
+
+  // Tool dispatcher — maps Gemini tool calls to demo functions
+  async function executeAgentTool(name, args) {
+    if (!account && name !== 'get_wallet_info') {
+      // get_balances doesn't strictly require an account if we ask user to connect first
+      if (name !== 'get_balances') {
+        return { error: 'Wallet not connected. User must click "Connect Wallet" first.' };
+      }
+    }
+
+    switch (name) {
+      case 'get_wallet_info': {
+        if (!account) return { connected: false, message: 'No wallet connected.' };
+        let chainId = null;
+        try { chainId = await window.ethereum?.request({ method: 'eth_chainId' }); } catch {}
+        const currentChain = Object.values(CHAINS).find(c => c.chainIdHex === chainId);
+        return {
+          connected: true,
+          address: account,
+          current_chain: currentChain?.name || 'Unknown',
+          current_chain_key: currentChain?.key || null,
+        };
+      }
+      case 'get_balances': {
+        if (!account) return { error: 'No wallet connected.' };
+        await refreshAllBalances();
+        const out = {};
+        for (const k of CHAIN_KEYS) {
+          const v = window.__balances?.[k];
+          out[k] = { chain: CHAINS[k].name, balance_usdc: v !== null && v !== undefined ? parseFloat(v).toFixed(4) : null };
+        }
+        return out;
+      }
+      case 'bridge_usdc': {
+        const { from_chain, to_chain, amount } = args;
+        if (!CHAINS[from_chain]) return { error: `Unknown from_chain: ${from_chain}` };
+        if (!CHAINS[to_chain]) return { error: `Unknown to_chain: ${to_chain}` };
+        if (from_chain === to_chain) return { error: 'Source and destination must differ.' };
+        if (!amount || amount <= 0) return { error: 'Amount must be positive.' };
+        // Pre-populate the bridge form, switch to Bridge tab, trigger
+        setMode('bridge');
+        document.getElementById('fromChain').value = from_chain;
+        document.getElementById('toChain').value = to_chain;
+        document.getElementById('amount').value = String(amount);
+        try {
+          await startBridge();
+          return { status: 'submitted', message: `Bridge of ${amount} USDC from ${CHAINS[from_chain].name} to ${CHAINS[to_chain].name} initiated. User must approve in MetaMask.` };
+        } catch (e) {
+          return { error: e?.message || String(e) };
+        }
+      }
+      case 'send_usdc': {
+        const { chain, to, amount } = args;
+        if (!CHAINS[chain]) return { error: `Unknown chain: ${chain}` };
+        if (!/^0x[a-fA-F0-9]{40}$/.test(to)) return { error: 'Invalid recipient address.' };
+        if (!amount || amount <= 0) return { error: 'Amount must be positive.' };
+        try {
+          const result = await realSendUSDC(chain, to, String(amount));
+          recordTx({
+            type: 'send', fromChain: chain, amount: fmtAmount(amount),
+            token: 'USDC', hash: result.hash, explorerUrl: result.explorerUrl, status: 'pending',
+          });
+          return { status: 'sent', tx_hash: result.hash, explorer_url: result.explorerUrl };
+        } catch (e) {
+          return { error: e?.message || String(e) };
+        }
+      }
+      case 'get_pending_bridges': {
+        const list = loadHistory();
+        const pending = list
+          .filter(e => e.status === 'burned_waiting_mint')
+          .filter(e => !account || !e.account || e.account.toLowerCase() === account.toLowerCase())
+          .map(e => ({
+            burn_hash: e.hash,
+            from_chain: e.fromChain,
+            to_chain: e.toChain,
+            amount: e.amount,
+            burn_explorer: e.explorerUrl,
+            burned_at: new Date(e.ts).toISOString(),
+            age_minutes: Math.floor((Date.now() - e.ts) / 60000),
+          }));
+        return { count: pending.length, bridges: pending };
+      }
+      case 'resume_mint': {
+        const { burn_hash } = args;
+        if (!burn_hash || typeof burn_hash !== 'string') return { error: 'burn_hash required' };
+        const result = await resumeMint(burn_hash);
+        if (result.success) {
+          return { status: 'minted', mint_hash: result.mintHash, explorer_url: result.explorer };
+        }
+        return { error: result.error, message: result.message };
+      }
+      default:
+        return { error: `Unknown tool: ${name}` };
+    }
+  }
+  // ═══════════════════════════════════════════════════════
+  // END AGENT MODULE
+  // ═══════════════════════════════════════════════════════
+
+
+  // ── Gas Estimation ───
+  // Returns estimated total cost (gas units × gas price) in native ETH
+  // and a USD-ish rough estimate. Testnet gas is free in practice but UX matters.
+  async function estimateGas(chainKey, opType, params = {}) {
+    if (!hasEthers()) return null;
+    try {
+      const cfg = CHAINS[chainKey];
+      const ro = new ethers.JsonRpcProvider(cfg.rpcUrl);
+      const feeData = await ro.getFeeData();
+      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
+      if (!gasPrice) return null;
+      // Standard gas-unit ballpark per op (avoids signing just to get an estimate)
+      const gasUnits = {
+        transfer: 65_000n,   // ERC20 transfer
+        approve:  46_000n,   // ERC20 approve
+        burn:     150_000n,  // CCTP depositForBurn
+        mint:     200_000n,  // CCTP receiveMessage
+      };
+      const units = gasUnits[opType] ?? 100_000n;
+      const totalWei = units * gasPrice;
+      const totalEth = parseFloat(ethers.formatEther(totalWei));
+      return {
+        units,
+        gasPriceGwei: parseFloat(ethers.formatUnits(gasPrice, 'gwei')),
+        totalEth,
+        nativeSymbol: cfg.nativeCurrency?.symbol || 'ETH',
+        // Arc uses USDC as native — show as USDC directly
+        isUsdcNative: cfg.nativeCurrency?.symbol === 'USDC',
+      };
+    } catch (e) {
+      console.warn('estimateGas failed:', e);
+      return null;
+    }
+  }
+  function formatGasEstimate(est) {
+    if (!est) return '—';
+    const v = est.totalEth;
+    if (est.isUsdcNative) return `~${v < 0.0001 ? '<0.0001' : v.toFixed(4)} USDC`;
+    return `~${v < 0.00001 ? '<0.00001' : v.toFixed(6)} ${est.nativeSymbol}`;
+  }
+  async function updateBridgeGasEstimate() {
+    if (!account) return;
+    const fromKey = document.getElementById('fromChain').value;
+    const estEl = document.getElementById('bridgeGasEst');
+    if (!estEl) return;
+    estEl.textContent = '…';
+    // CCTP needs approve + burn on source; mint gas paid by anyone on destination
+    const [approveEst, burnEst] = await Promise.all([
+      estimateGas(fromKey, 'approve'),
+      estimateGas(fromKey, 'burn'),
+    ]);
+    if (!approveEst || !burnEst) { estEl.textContent = '—'; return; }
+    const totalEth = approveEst.totalEth + burnEst.totalEth;
+    const combined = { ...burnEst, totalEth };
+    estEl.textContent = formatGasEstimate(combined);
+  }
+  async function updateSendGasEstimate() {
+    if (!account) return;
+    const chainKey = document.getElementById('sendChain').value;
+    const estEl = document.getElementById('sendGasEst');
+    if (!estEl) return;
+    estEl.textContent = '…';
+    const est = await estimateGas(chainKey, 'transfer');
+    estEl.textContent = formatGasEstimate(est);
+  }
+  // ═══════════════════════════════════════════════════════
+  // END FEATURE MODULES
+  // ═══════════════════════════════════════════════════════
+
+  // ERC20 minimal ABI (works for both USDC contracts)
+  const ERC20_ABI = [
+    'function balanceOf(address owner) view returns (uint256)',
+    'function decimals() view returns (uint8)',
+    'function symbol() view returns (string)',
+    'function transfer(address to, uint256 amount) returns (bool)',
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+  ];
+
+  // CCTP V2 ABIs
+  const CCTP_TOKEN_MESSENGER_ABI = [
+    // V2 signature includes maxFee + finalityThreshold + bytes32 destinationCaller + bytes hookData
+    'function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold) returns (uint64 nonce)',
+  ];
+  const CCTP_MESSAGE_TRANSMITTER_ABI = [
+    'function receiveMessage(bytes message, bytes attestation) returns (bool success)',
+  ];
+
+  // Circle Iris API for attestations (CCTP V2)
+  // Testnet: https://iris-api-sandbox.circle.com
+  // Mainnet: https://iris-api.circle.com
+  const IRIS_API_BASE = 'https://iris-api-sandbox.circle.com';
+
+  // Web3 runtime state
+  let provider = null;       // ethers.BrowserProvider
+  let signer = null;         // ethers.JsonRpcSigner
+  let currentChainKey = null;// 'arc' | 'sepolia' | 'baseSepolia' | 'arbSepolia' | null
+
+  function hasEthereum() { return typeof window.ethereum !== 'undefined'; }
+  function hasEthers()   { return typeof window.ethers !== 'undefined'; }
+
+  // --- Network: add to wallet if missing, then switch ---
+  // Wraps MetaMask requests with a timeout so the UI doesn't hang forever
+  // when the user ignores the wallet popup.
+  async function ensureChain(chainKey) {
+    if (!hasEthereum()) throw new Error('No injected wallet');
+    const cfg = CHAINS[chainKey];
+    console.log(`[ensureChain] target: ${cfg.name} (chainId ${cfg.chainId}, hex ${cfg.chainIdHex})`);
+
+    // If we're already on the right chain, skip entirely
+    try {
+      const currentHex = await window.ethereum.request({ method: 'eth_chainId' });
+      const currentDec = parseInt(currentHex, 16);
+      if (currentDec === cfg.chainId) {
+        console.log(`[ensureChain] already on ${cfg.name}, skipping switch`);
+        currentChainKey = chainKey;
+        return;
+      }
+      console.log(`[ensureChain] currently on chainId ${currentDec} (${currentHex}), switching to ${cfg.chainIdHex}`);
+    } catch (e) {
+      console.warn('[ensureChain] could not read current chainId:', e);
+    }
+
+    // Wrap MetaMask request with 90s timeout so UI doesn't hang on ignored popups
+    const requestWithTimeout = (params, timeoutMs = 90_000) => Promise.race([
+      window.ethereum.request(params),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error('Wallet popup timed out (90s). Check the MetaMask extension icon in your browser toolbar — you may have an unconfirmed request waiting.')),
+        timeoutMs
+      )),
+    ]);
+
+    try {
+      await requestWithTimeout({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: cfg.chainIdHex }],
+      });
+      console.log(`[ensureChain] switched to ${cfg.name}`);
+    } catch (err) {
+      console.log(`[ensureChain] switch failed:`, err);
+      // 4902 = chain not added yet → add it
+      if (err.code === 4902 || /Unrecognized chain|wallet_addEthereumChain/i.test(err.message || '')) {
+        console.log(`[ensureChain] chain not in wallet, adding ${cfg.name}…`);
+        try {
+          await requestWithTimeout({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: cfg.chainIdHex,
+              chainName: cfg.name,
+              nativeCurrency: cfg.nativeCurrency,
+              rpcUrls: [cfg.rpcUrl],
+              blockExplorerUrls: [cfg.explorer],
+            }],
+          });
+          console.log(`[ensureChain] added ${cfg.name}`);
+        } catch (addErr) {
+          // User rejected the add
+          if (addErr.code === 4001) throw new Error(`You rejected the request to add ${cfg.name} to your wallet.`);
+          throw addErr;
+        }
+      } else if (err.code === 4001) {
+        throw new Error(`You rejected the network switch to ${cfg.name}.`);
+      } else {
+        throw err;
+      }
+    }
+    currentChainKey = chainKey;
+  }
+
+  // --- Read USDC balance from any chain (read-only, no signer needed) ---
+  async function readUsdcBalance(chainKey, address) {
+    if (!hasEthers()) throw new Error('ethers.js not loaded');
+    if (!address) throw new Error('No address');
+    const cfg = CHAINS[chainKey];
+    const ro = new ethers.JsonRpcProvider(cfg.rpcUrl);
+    const usdc = new ethers.Contract(cfg.usdcAddress, ERC20_ABI, ro);
+    try {
+      const raw = await usdc.balanceOf(address);
+      return ethers.formatUnits(raw, cfg.usdcDecimals);
+    } catch (e) {
+      console.warn(`Balance read failed on ${chainKey}:`, e.message);
+      return null;
+    }
+  }
+
+  // --- Refresh balances across ALL configured chains and update Unified Balance card ---
+  async function refreshAllBalances() {
+    if (!account) return;
+    const container = document.getElementById('ubBalanceList');
+    const totalEl = document.getElementById('ubTotal');
+    if (!container) return;
+    // loading placeholders
+    container.innerHTML = CHAIN_KEYS.map(k => {
+      const c = CHAINS[k];
+      return `<div class="text-[11px]">
+        <div class="flex justify-between mb-1.5">
+          <span class="text-white/70">${c.name}${c.featured?' <span class="text-purple-400 text-[9px]">★</span>':''}</span>
+          <span class="font-mono text-white/50 text-xs" id="ubBal_${k}">…</span>
+        </div>
+        <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div id="ubBar_${k}" class="h-1.5 ${c.featured?'bg-emerald-400':'bg-purple-400'} rounded-full transition-all duration-700" style="width:0%"></div>
+        </div>
+      </div>`;
+    }).join('');
+    // fetch all in parallel
+    const results = await Promise.all(CHAIN_KEYS.map(k => readUsdcBalance(k, account)));
+    const balances = {};
+    let total = 0;
+    let featuredTotal = 0;
+    CHAIN_KEYS.forEach((k, i) => {
+      const v = results[i];
+      balances[k] = v;
+      if (v !== null) {
+        total += parseFloat(v);
+        if (CHAINS[k].featured) featuredTotal += parseFloat(v);
+      }
+    });
+    // render
+    CHAIN_KEYS.forEach(k => {
+      const v = balances[k];
+      const fmt = v !== null ? parseFloat(v).toFixed(2) : '—';
+      const balEl = document.getElementById(`ubBal_${k}`);
+      const barEl = document.getElementById(`ubBar_${k}`);
+      if (balEl) balEl.textContent = `${fmt} USDC`;
+      if (barEl) {
+        const pct = (v !== null && total > 0) ? (parseFloat(v) / total) * 100 : 0;
+        barEl.style.width = pct.toFixed(0) + '%';
+      }
+    });
+    if (totalEl) totalEl.textContent = `${total.toFixed(2)} USDC`;
+    // expose cache for MAX buttons + other UI
+    window.__balances = balances;
+    // refresh per-form balance display
+    refreshBridgeBalance();
+    refreshSendBalance();
+    refreshSwapBalance();
+  }
+
+  // ── Per-form balance displays + MAX buttons ──────────────────
+  function fmtBal(v) {
+    if (v === null || v === undefined) return '—';
+    return `${parseFloat(v).toFixed(2)} USDC`;
+  }
+
+  function refreshBridgeBalance() {
+    const sel = document.getElementById('fromChain');
+    if (!sel) return;
+    const key = sel.value;
+    const bal = window.__balances?.[key];
+    const balEl = document.getElementById('bridgeBalance');
+    const maxBtn = document.getElementById('bridgeMaxBtn');
+    if (balEl) balEl.textContent = fmtBal(bal);
+    if (maxBtn) maxBtn.disabled = !(bal !== null && bal !== undefined && parseFloat(bal) > 0);
+  }
+
+  function refreshSendBalance() {
+    const sel = document.getElementById('sendChain');
+    if (!sel) return;
+    const key = sel.value;
+    const bal = window.__balances?.[key];
+    const balEl = document.getElementById('sendBalance');
+    const maxBtn = document.getElementById('sendMaxBtn');
+    if (balEl) balEl.textContent = fmtBal(bal);
+    if (maxBtn) maxBtn.disabled = !(bal !== null && bal !== undefined && parseFloat(bal) > 0);
+  }
+
+  function refreshSwapBalance() {
+    // Swap runs only on Arc Testnet, only USDC has real on-chain balance
+    const tokenSel = document.getElementById('swapFromToken');
+    if (!tokenSel) return;
+    const token = tokenSel.value;
+    const balEl = document.getElementById('swapBalance');
+    const maxBtn = document.getElementById('swapMaxBtn');
+    if (token !== 'USDC') {
+      // EURC / cirBTC: no real balance source — show dash and disable MAX
+      if (balEl) balEl.textContent = '—';
+      if (maxBtn) maxBtn.disabled = true;
+      return;
+    }
+    const bal = window.__balances?.arc;
+    if (balEl) balEl.textContent = fmtBal(bal);
+    if (maxBtn) maxBtn.disabled = !(bal !== null && bal !== undefined && parseFloat(bal) > 0);
+  }
+
+  function setMaxBridge() {
+    const key = document.getElementById('fromChain').value;
+    const bal = window.__balances?.[key];
+    if (bal && parseFloat(bal) > 0) {
+      document.getElementById('amount').value = parseFloat(bal).toFixed(6).replace(/\.?0+$/, '');
+    }
+  }
+
+  function setMaxSend() {
+    const key = document.getElementById('sendChain').value;
+    const bal = window.__balances?.[key];
+    if (bal && parseFloat(bal) > 0) {
+      document.getElementById('sendAmount').value = parseFloat(bal).toFixed(6).replace(/\.?0+$/, '');
+    }
+  }
+
+  function setMaxSwap() {
+    const token = document.getElementById('swapFromToken').value;
+    if (token !== 'USDC') return;  // only USDC has real balance
+    const bal = window.__balances?.arc;
+    if (bal && parseFloat(bal) > 0) {
+      document.getElementById('swapFromAmt').value = parseFloat(bal).toFixed(6).replace(/\.?0+$/, '');
+      updateSwapQuote();
+    }
+  }
+
+  // --- Real Send: ERC20 transfer of USDC on current chain ---
+  async function realSendUSDC(chainKey, to, amountStr) {
+    if (!signer) throw new Error('Wallet not connected');
+    await ensureChain(chainKey);
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const cfg = CHAINS[chainKey];
+    const usdc = new ethers.Contract(cfg.usdcAddress, ERC20_ABI, signer);
+
+    const feeInfo = getFeeAmount(amountStr);
+    const userAddr = await signer.getAddress();
+    const totalAmount = ethers.parseUnits(amountStr, cfg.usdcDecimals);
+
+    // ── Pre-flight: ensure total balance covers BOTH fee AND main transfer ──
+    // Without this, if main tx fails (user reject, insufficient gas, etc),
+    // user permanently loses the fee with nothing to show for it.
+    if (feeInfo) {
+      const balance = await usdc.balanceOf(userAddr);
+      if (balance < totalAmount) {
+        const have = ethers.formatUnits(balance, cfg.usdcDecimals);
+        const need = ethers.formatUnits(totalAmount, cfg.usdcDecimals);
+        throw new Error(`Insufficient USDC. You have ${have}, need ${need} (${feeInfo.feeUsdc} fee + ${feeInfo.netUsdc} to recipient).`);
+      }
+      // Make user aware this is TWO transactions
+      const ok = confirm(
+        `Send ${amountStr} USDC on ${cfg.name}?\n\n` +
+        `⚠ This will require TWO wallet signatures:\n` +
+        `  1. Creator fee: ${feeInfo.feeUsdc.toFixed(4)} USDC → ${feeInfo.recipient.slice(0,6)}…${feeInfo.recipient.slice(-4)}\n` +
+        `  2. Main transfer: ${feeInfo.netUsdc.toFixed(4)} USDC → ${to.slice(0,6)}…${to.slice(-4)}\n\n` +
+        `If you cancel the second one, the fee transaction (step 1) cannot be reversed.\n\n` +
+        `Continue?`
+      );
+      if (!ok) throw new Error('Cancelled by user');
+    }
+
+    // Step 1: creator fee (if any) - separate transaction
+    let feeHash = null;
+    if (feeInfo) {
+      console.log(`[Monetization] sending creator fee ${feeInfo.feeUsdc} USDC to ${feeInfo.recipient}`);
+      const feeAmount = ethers.parseUnits(feeInfo.feeUsdc.toFixed(6), cfg.usdcDecimals);
+      const feeTx = await usdc.transfer(feeInfo.recipient, feeAmount);
+      feeHash = feeTx.hash;
+      await feeTx.wait();
+    }
+
+    // Step 2: main transfer (net amount)
+    const mainAmtStr = feeInfo ? feeInfo.netUsdc.toFixed(6) : amountStr;
+    const amount = ethers.parseUnits(mainAmtStr, cfg.usdcDecimals);
+    const tx = await usdc.transfer(to, amount);
+    return {
+      hash: tx.hash,
+      feeHash,
+      feeUsdc: feeInfo?.feeUsdc || null,
+      explorerUrl: `${cfg.explorer}/tx/${tx.hash}`,
+      wait: () => tx.wait(),
+    };
+  }
+
+  // --- Real CCTP V2 Bridge: approve + burn on source, poll Iris, then mint on destination ---
+  // Helper: verify the user can pay gas for receiveMessage on the destination chain.
+  //   Fail-closed: if the destination RPC is unreachable, throw — don't silently continue.
+  //   - If destination uses USDC as native gas (e.g. Arc) → check USDC native balance ≥ 0.05
+  //     (user cannot spend "about-to-be-minted" USDC to pay for the mint tx itself).
+  //   - Otherwise (ETH-gas chains) → check ≥ 0.0005 ETH.
+  async function assertDestinationGas(toKey, userAddr) {
+    const toCfg = CHAINS[toKey];
+    let destNative;
+    try {
+      const destRpc = new ethers.JsonRpcProvider(toCfg.rpcUrl);
+      destNative = await destRpc.getBalance(userAddr);
+    } catch (e) {
+      // Fail-closed: don't let the bridge proceed if we can't verify destination gas.
+      throw new Error(
+        `Could not verify destination gas on ${toCfg.name} (RPC error: ${e?.shortMessage || e?.message || 'unknown'}). ` +
+        `Please try again in a moment — bridging now risks the mint step failing.`
+      );
+    }
+    const isUsdcGas = toCfg.nativeCurrency?.symbol === 'USDC';
+    const decimals = toCfg.nativeCurrency?.decimals || 18;
+    const minNative = isUsdcGas
+      ? ethers.parseUnits('0.05', decimals)
+      : ethers.parseEther('0.0005');
+    if (destNative < minNative) {
+      const have = isUsdcGas
+        ? ethers.formatUnits(destNative, decimals)
+        : ethers.formatEther(destNative);
+      const sym = toCfg.nativeCurrency?.symbol || 'native';
+      const min = isUsdcGas ? '0.05' : '0.0005';
+      throw new Error(
+        `Insufficient gas on destination chain ${toCfg.name}. ` +
+        `You have ${parseFloat(have).toFixed(6)} ${sym}, need at least ${min} ${sym} to mint USDC there. ` +
+        `Get test ${sym} from the Bridge tab faucet links.`
+      );
+    }
+  }
+
+  async function realBridgeUSDC(fromKey, toKey, amountStr, recipientAddr, onStep) {
+    if (!signer) throw new Error('Wallet not connected');
+    const fromCfg = CHAINS[fromKey];
+    const toCfg   = CHAINS[toKey];
+
+    // ── Step 0: pre-flight checks (catch issues BEFORE any wallet pop-up) ──
+    const amount = ethers.parseUnits(amountStr, fromCfg.usdcDecimals);
+    const feeInfo = getFeeAmount(amountStr);  // null if monetization disabled
+
+    // 0a. Source-chain USDC balance must cover the full input amount.
+    //     Note: the creator fee comes OUT of `amount` (we burn amount - fee on destination).
+    //     So total user spend = amount, NOT amount + fee. Don't double-count.
+    await ensureChain(fromKey);
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const userAddr = await signer.getAddress();
+    const srcUsdc = new ethers.Contract(fromCfg.usdcAddress, ERC20_ABI, signer);
+    const srcBalance = await srcUsdc.balanceOf(userAddr);
+    if (srcBalance < amount) {
+      const have = ethers.formatUnits(srcBalance, fromCfg.usdcDecimals);
+      const need = ethers.formatUnits(amount, fromCfg.usdcDecimals);
+      throw new Error(`Insufficient USDC on ${fromCfg.name}. You have ${have}, need ${need}.`);
+    }
+
+    // 0b. Destination-chain native gas check — ALWAYS check
+    //     receiveMessage executes on the destination, requires destination gas regardless of source.
+    await assertDestinationGas(toKey, userAddr);
+
+    // ── Step 0c: Creator fee transfer (if monetization enabled) ──
+    // This is a SEPARATE transaction. The user has already been warned via confirmation modal.
+    // Record it to history IMMEDIATELY on success — that way if approve/burn later fails,
+    // the user still sees evidence of the fee payment (and can confirm refund manually if needed).
+    let feeHash = null;
+    if (feeInfo) {
+      const feeAmount = ethers.parseUnits(feeInfo.feeUsdc.toFixed(6), fromCfg.usdcDecimals);
+      const feeTx = await srcUsdc.transfer(feeInfo.recipient, feeAmount);
+      feeHash = feeTx.hash;
+      await feeTx.wait();
+      // Persist a standalone fee record. Even if burn fails later, this stays in history.
+      recordTx({
+        type: 'fee',
+        status: 'confirmed',
+        fromChain: fromKey,
+        toChain: toKey,
+        amount: feeInfo.feeUsdc.toFixed(6).replace(/\.?0+$/, ''),
+        token: 'USDC',
+        hash: feeHash,
+        explorerUrl: `${fromCfg.explorer}/tx/${feeHash}`,
+        note: 'creator_fee_for_bridge',
+      });
+    }
+
+    // ── Step 1: approve TokenMessenger on source chain ──
+    onStep && onStep(1, 'switching');
+    const messenger = new ethers.Contract(fromCfg.cctpTokenMessenger, CCTP_TOKEN_MESSENGER_ABI, signer);
+
+    // Bridge net amount (post-fee)
+    const bridgeAmount = feeInfo
+      ? amount - ethers.parseUnits(feeInfo.feeUsdc.toFixed(6), fromCfg.usdcDecimals)
+      : amount;
+    const bridgedUsdcStr = ethers.formatUnits(bridgeAmount, fromCfg.usdcDecimals);
+
+    const currentAllowance = await srcUsdc.allowance(userAddr, fromCfg.cctpTokenMessenger);
+    let approveHash = null;
+    if (currentAllowance < bridgeAmount) {
+      onStep && onStep(1, 'approving');
+      const approveTx = await srcUsdc.approve(fromCfg.cctpTokenMessenger, bridgeAmount);
+      await approveTx.wait();
+      approveHash = approveTx.hash;
+    }
+
+    // ── Step 2: burn on source ──
+    onStep && onStep(2, 'burning');
+    const mintRecipient = ethers.zeroPadValue(recipientAddr, 32);
+    const destCaller = ethers.ZeroHash;
+    const maxFee = 0n;
+    const minFinality = 2000;
+    const burnTx = await messenger.depositForBurn(
+      bridgeAmount, toCfg.cctpDomain, mintRecipient, fromCfg.usdcAddress,
+      destCaller, maxFee, minFinality
+    );
+    await burnTx.wait();
+
+    // ── P1-1 / P1-2: From here on, burn has succeeded. Any failure is RECOVERABLE.
+    //     Record to history immediately so user can "Resume Mint" later if anything breaks.
+    recordTx({
+      type: 'bridge',
+      status: 'burned_waiting_mint',
+      fromChain: fromKey,
+      toChain: toKey,
+      amount: fmtAmount(bridgedUsdcStr),
+      token: 'USDC',
+      hash: burnTx.hash,
+      explorerUrl: `${fromCfg.explorer}/tx/${burnTx.hash}`,
+      recipient: recipientAddr,
+      sourceDomain: fromCfg.cctpDomain,
+      feeHash,
+      feeUsdc: feeInfo?.feeUsdc || null,
+      totalAmount: amountStr,
+    });
+
+    // ── Step 3: poll Iris for attestation ──
+    onStep && onStep(3, 'attesting');
+    const attestation = await pollAttestation(fromCfg.cctpDomain, burnTx.hash);
+    if (!attestation) {
+      // Attestation timeout — burn succeeded, mint can be resumed later via History
+      const err = new Error(
+        `Attestation timed out. Your funds are safe — burn succeeded on ${fromCfg.name}. ` +
+        `Use "Resume Mint" in History tab once attestation completes (usually within a few minutes).`
+      );
+      err.recoverable = true;
+      err.recoveryStage = 'attestation';
+      err.burnHash = burnTx.hash;
+      throw err;
+    }
+
+    // ── Step 4: switch to destination chain, call receiveMessage ──
+    // P1-2: wrap in try/catch — burn already succeeded, mint failure is recoverable
+    onStep && onStep(3, 'minting');
+    let mintHash;
+    try {
+      await ensureChain(toKey);
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      const destTransmitter = new ethers.Contract(toCfg.cctpMessageTransmitter, CCTP_MESSAGE_TRANSMITTER_ABI, signer);
+      const mintTx = await destTransmitter.receiveMessage(attestation.message, attestation.attestation);
+      await mintTx.wait();
+      mintHash = mintTx.hash;
+    } catch (mintErr) {
+      const err = new Error(
+        `Mint failed on ${toCfg.name}: ${mintErr?.shortMessage || mintErr?.reason || mintErr?.message}. ` +
+        `Your funds are safe — burn succeeded. Use "Resume Mint" in History tab to try again.`
+      );
+      err.recoverable = true;
+      err.recoveryStage = 'mint';
+      err.burnHash = burnTx.hash;
+      err.cause = mintErr;
+      throw err;
+    }
+
+    // ── Success: update history record from 'burned_waiting_mint' → 'confirmed' ──
+    updateTxStatus(burnTx.hash, {
+      status: 'confirmed',
+      mintHash,
+      destExplorerUrl: `${toCfg.explorer}/tx/${mintHash}`,
+    });
+
+    return {
+      // P1-3: full breakdown so success UI can show what really happened
+      totalAmount: amountStr,
+      feeUsdc: feeInfo?.feeUsdc || null,
+      bridgedAmount: parseFloat(bridgedUsdcStr).toFixed(6).replace(/\.?0+$/, ''),
+      approveHash,
+      feeHash,
+      burnHash: burnTx.hash,
+      mintHash,
+      sourceExplorerUrl: `${fromCfg.explorer}/tx/${burnTx.hash}`,
+      destExplorerUrl: `${toCfg.explorer}/tx/${mintHash}`,
+      feeExplorerUrl: feeHash ? `${fromCfg.explorer}/tx/${feeHash}` : null,
+      approveExplorerUrl: approveHash ? `${fromCfg.explorer}/tx/${approveHash}` : null,
+    };
+  }
+
+  // Helper: update existing tx history record (used to mark 'burned_waiting_mint' → 'confirmed')
+  function updateTxStatus(hash, patch) {
+    const list = loadHistory();
+    const idx = list.findIndex(e => e.hash === hash);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], ...patch };
+    try { localStorage.setItem(TX_HISTORY_KEY, JSON.stringify(list)); } catch {}
+    renderHistoryIfVisible();
+  }
+
+  // Resume a stuck bridge mint — uses already-burned burnHash from history
+  async function resumeMint(burnHash) {
+    if (!signer) {
+      alert(t('alert_connect_wallet'));
+      return { error: 'no_wallet' };
+    }
+    const list = loadHistory();
+    const entry = list.find(e => e.hash === burnHash);
+    if (!entry) return { error: 'not_found' };
+    if (entry.status !== 'burned_waiting_mint') {
+      return { error: 'already_completed', entry };
+    }
+    const fromCfg = CHAINS[entry.fromChain];
+    const toCfg   = CHAINS[entry.toChain];
+    if (!fromCfg || !toCfg) return { error: 'unknown_chain' };
+
+    try {
+      // Poll attestation (may have completed by now)
+      const attestation = await pollAttestation(entry.sourceDomain ?? fromCfg.cctpDomain, burnHash);
+      if (!attestation) {
+        return { error: 'attestation_pending', message: 'Attestation not ready yet. Try again in a minute.' };
+      }
+      // Verify destination gas BEFORE asking the user to switch & sign
+      // (Same check as initial bridge — prevents Resume Mint from failing the same way.)
+      const userAddr = await signer.getAddress();
+      try {
+        await assertDestinationGas(entry.toChain, userAddr);
+      } catch (gasErr) {
+        return { error: 'destination_gas', message: gasErr.message };
+      }
+      // Switch to destination chain
+      await ensureChain(entry.toChain);
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      const destTransmitter = new ethers.Contract(toCfg.cctpMessageTransmitter, CCTP_MESSAGE_TRANSMITTER_ABI, signer);
+      const mintTx = await destTransmitter.receiveMessage(attestation.message, attestation.attestation);
+      await mintTx.wait();
+      // Mark confirmed
+      updateTxStatus(burnHash, {
+        status: 'confirmed',
+        mintHash: mintTx.hash,
+        destExplorerUrl: `${toCfg.explorer}/tx/${mintTx.hash}`,
+      });
+      refreshAllBalances();
+      return { success: true, mintHash: mintTx.hash, explorer: `${toCfg.explorer}/tx/${mintTx.hash}` };
+    } catch (e) {
+      return { error: 'mint_failed', message: e?.shortMessage || e?.reason || e?.message || String(e) };
+    }
+  }
+
+  // --- Poll Circle Iris API for attestation (CCTP V2 endpoint) ---
+  async function pollAttestation(sourceDomain, txHash) {
+    const url = `${IRIS_API_BASE}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+    const maxAttempts = 60;      // ~2 min total at 2s interval
+    const interval = 2000;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const headers = {};
+        if (CIRCLE_KIT_KEY) headers['Authorization'] = `Bearer ${CIRCLE_KIT_KEY}`;
+        const res = await fetch(url, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          // V2 returns { messages: [{ status, message, attestation, ... }] }
+          const msg = data.messages?.[0];
+          if (msg && msg.status === 'complete' && msg.attestation && msg.attestation !== 'PENDING') {
+            return { message: msg.message, attestation: msg.attestation };
+          }
+        }
+      } catch (e) {
+        console.warn('Iris poll attempt', i, e.message);
+      }
+      await new Promise(r => setTimeout(r, interval));
+    }
+    return null;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // END REAL WEB3 module
+  // ═══════════════════════════════════════════════════════
+
+  // ── i18n ──────────────────────────────────────────────
+  const I18N = {
+    en: {
+      tab_bridge:'Bridge', tab_defi:'DeFi Actions', tab_history:'History', tab_agent:'AI Agent',
+      // History
+      history_title:'Transaction History', history_subtitle:'Last 50 actions on this device · stored locally',
+      history_clear:'Clear All',
+      history_empty:'No transactions yet — connect your wallet and try Bridge / Send to see history here.',
+      history_status_ok:'OK',
+      history_status_pending:'PENDING',
+      history_status_pending_mint:'AWAITING MINT',
+      history_status_failed:'FAILED',
+      history_creator_fee:'Creator fee',
+      history_view_explorer:'View on explorer',
+      history_resume_mint:'Resume Mint',
+      history_resuming:'Resuming…',
+      history_resume_ok:'Mint completed successfully!',
+      history_resume_already_done:'This bridge is already complete.',
+      history_mint_tx:'Mint tx',
+      // Bridge Confirm modal
+      bc_title:'Confirm Bridge',
+      bc_route:'Route',
+      bc_breakdown:'Amount',
+      bc_total_input:'Total input',
+      bc_creator_fee:'Creator fee',
+      bc_recipient_gets:'Recipient gets',
+      bc_signatures:'Wallet signatures required',
+      bc_fee_warn:'The creator fee is sent first as a separate transaction. If you cancel any later step, the fee will NOT be refunded automatically.',
+      bc_confirm:'Confirm & Start',
+      bc_sig_fee:'Creator fee transfer',
+      bc_sig_approve:'Approve USDC',
+      bc_sig_approve_note:'skipped if already approved',
+      bc_optional:'optional',
+      bc_sig_burn:'CCTP burn on',
+      bc_sig_mint:'Mint USDC on',
+      // Bridge error UI
+      bridge_err_failed:'Bridge failed',
+      bridge_err_attestation_pending:'Bridge stuck on attestation',
+      bridge_err_mint_pending:'Bridge stuck on destination mint',
+      bridge_err_funds_safe_title:'Your funds are safe',
+      bridge_err_funds_safe_body:'Burn succeeded on {from}. Use "Resume Mint" in History to complete the bridge.',
+      bridge_err_view_burn:'View burn tx on {from} explorer',
+      bridge_err_copy:'Copy error',
+      bridge_err_copied:'Copied ✓',
+      bridge_err_back:'Back to Bridge',
+      bridge_err_retry:'Retry',
+      bridge_err_resume_mint:'Go to History',
+      // Monetization
+      mon_title:'Creator Monetization',
+      mon_desc:"Arc App Kit's built-in monetization: collect a small fee from every Bridge / Send / Swap as the dApp creator. Stored locally — testnet only.",
+      mon_enable:'Enable creator fee',
+      mon_fee_label:'Fee rate (basis points)',
+      mon_fee_hint:'10 bps = 0.10% · 100 bps = 1% · max 500 bps (5%)',
+      mon_addr_label:'Fee recipient address',
+      mon_addr_hint:'Fees will be transferred to this address before the main transfer',
+      // Form labels
+      label_gas:'Network fee (est.)', label_creator_fee:'Creator fee',
+      rate:'Rate',
+      agent_subtitle:'Talk to an AI agent. It plans, asks for confirmation, then executes real testnet transactions.',
+      agent_btn_key:'Gemini API Key',
+      agent_examples:'Try these',
+      agent_empty:'Ask the agent anything about your testnet USDC.',
+      agent_send:'Send',
+      agent_disclaimer:'AI may make mistakes. Every transaction requires your explicit approval. Testnet only.',
+      badge_live:'4 testnets · live',
+      badge_cctp:'CCTP Native Cross-Chain',
+      hero_title:'Cross-Chain USDC Bridge',
+      hero_desc:'Powered by CCTP V2 · Sub-second finality · 4 testnets',
+      label_from:'From', label_to:'To', label_amount:'Amount', label_balance:'Balance:',
+      btn_connect:'Connect Wallet', btn_bridge:'Start Bridge',
+      faucets_title:'Testnet Faucets',
+      faucets_hint:'All USDC faucets use the same Circle faucet — choose your network on the page',
+      defi_subtitle:'Send and balance check work on all 4 testnets. Swap is a UI demo (real DEX coming).',
+      swap_kitkey:'Real integration requires a Circle Console Kit Key',
+      swap_pay:'You pay', swap_receive:'You receive (est.)',
+      swap_rate_label:'Est. rate', swap_slippage:'Slippage protection',
+      btn_swap:'Execute Swap (Demo)',
+      send_subtitle:'Same-chain ERC-20 USDC transfer',
+      send_path:'Transfer Path', send_from:'From',
+      send_to_label:'To (same-chain)', send_asset:'Asset',
+      send_address:'Recipient Address', send_amount:'Amount',
+      btn_send:'Send (Demo)',
+      ub_subtitle:'Live USDC balance across all CCTP chains',
+      ub_notice:'Your USDC is scattered across chains. Bridge to Arc to use it in Swap &amp; DeFi.',
+      ub_ready:'✓ Ready', ub_needs_bridge:'⚠ Bridge first',
+      ub_available:'Total USDC across all chains',
+      btn_ub:'Fetch Live Balances',
+      progress_title:'CCTP Bridge in progress…',
+      progress_step1:'Approve USDC on', progress_step2:'Burn USDC on',
+      progress_step3:'Attestation + Mint on',
+      progress_phase_1_switching:'Switching wallet to {from}…',
+      progress_phase_1_approving:'Approve USDC spending on {from}…',
+      progress_phase_2_burning:'Burn {amount} USDC on {from}…',
+      progress_phase_3_attesting:'Waiting for Circle attestation… (10–30s standard)',
+      progress_phase_3_minting:'Mint {amount} USDC on {to}…',
+      result_title:'Bridge Successful', result_time:'Confirmation:',
+      result_speed:'Sub-second', result_blocks:'~1 block',
+      btn_again:'Bridge Again', btn_continue_defi:'Continue to DeFi Actions',
+      footer_main:'Arc Bridge Kit Official Demo · Testnet only',
+      footer_sub:'All DeFi actions are frontend demos ·',
+      footer_docs:'Real integration: see official docs',
+      modal_title:'Connect Wallet',
+      wallet_metamask_sub:'Browser extension',
+      wallet_wc_sub:'Scan with mobile wallet',
+      wallet_other:'Other Wallets', btn_cancel:'Cancel',
+      kit_key_title:'Circle Kit Key',
+      kit_key_desc1:'Get yours from',
+      kit_key_desc2:'→ Keys → Create Kit Key.',
+      kit_key_warn:'Add domain whitelist in Console — anyone visiting your page can read this key.',
+      kit_key_storage:'Stored only in your browser (localStorage), never in code.',
+      kit_key_label:'Kit Key',
+      kit_key_show:'Show key',
+      kit_key_save:'Save',
+      kit_key_clear:'Clear',
+      // dynamic
+      alert_connect_wallet:'Please connect your wallet first.',
+      alert_install_mm:'Please install MetaMask.',
+      alert_amount:'Please enter an amount greater than 0.',
+      alert_same_chain:'Source and destination cannot be the same.',
+      alert_invalid_addr:'Please enter a valid EVM address.',
+      status_bridged:'Bridge complete. You can now Swap, Send, or check Unified Balance on Arc Testnet.',
+      status_swap_done:'Swap demo: {amt} {from} → est. {to} {toTok} on Arc Testnet.',
+      status_send_done:'Send demo: {amt} {token} from {chain} to {addr} (same-chain).',
+      status_ub_fetching:'Fetching live balances from both chains…',
+      connected_prefix:'Connected', wc_connected:'WalletConnect Connected',
+      other_connected:'Wallet Connected',
+      success_bridged:'{amt} USDC from <span class="font-semibold">{from}</span><br>successfully bridged to <span class="font-semibold">{to}</span>',
+      success_total_input:'Total input',
+      success_creator_fee:'Creator fee',
+      success_bridged_minted:'Bridged &amp; minted',
+      success_fee_tx:'Creator fee tx',
+      success_approve_tx:'Approve tx',
+      success_burn_tx:'Burn tx on {chain}',
+      success_mint_tx:'Mint tx on {chain}',
+    },
+    zh: {
+      tab_bridge:'Bridge', tab_defi:'DeFi 操作', tab_history:'历史记录', tab_agent:'AI 代理',
+      // History
+      history_title:'交易历史', history_subtitle:'本设备最近 50 笔操作 · 保存在本地',
+      history_clear:'清空',
+      history_empty:'还没有交易记录 — 连接钱包并使用 Bridge / Send 后会显示在这里。',
+      history_status_ok:'成功',
+      history_status_pending:'进行中',
+      history_status_pending_mint:'待 MINT',
+      history_status_failed:'失败',
+      history_creator_fee:'开发者抽成',
+      history_view_explorer:'查看 explorer',
+      history_resume_mint:'继续 Mint',
+      history_resuming:'处理中…',
+      history_resume_ok:'Mint 已成功完成！',
+      history_resume_already_done:'此跨链已完成。',
+      history_mint_tx:'Mint 交易',
+      // Bridge Confirm
+      bc_title:'确认跨链',
+      bc_route:'路径',
+      bc_breakdown:'金额',
+      bc_total_input:'输入总额',
+      bc_creator_fee:'开发者抽成',
+      bc_recipient_gets:'收款方实收',
+      bc_signatures:'需要钱包签名次数',
+      bc_fee_warn:'开发者抽成会作为独立交易先发送。如果你随后取消任何一步，已扣 fee 不会自动退回。',
+      bc_confirm:'确认并开始',
+      bc_sig_fee:'抽成转账',
+      bc_sig_approve:'授权 USDC',
+      bc_sig_approve_note:'已授权则跳过',
+      bc_optional:'可选',
+      bc_sig_burn:'CCTP 销毁于',
+      bc_sig_mint:'目标链 Mint USDC 于',
+      // Bridge error UI
+      bridge_err_failed:'跨链失败',
+      bridge_err_attestation_pending:'跨链卡在 Attestation 阶段',
+      bridge_err_mint_pending:'跨链卡在目标链 Mint 阶段',
+      bridge_err_funds_safe_title:'资金安全',
+      bridge_err_funds_safe_body:'{from} 上的 burn 已成功。前往 History 使用「继续 Mint」完成跨链。',
+      bridge_err_view_burn:'在 {from} explorer 查看 burn 交易',
+      bridge_err_copy:'复制错误信息',
+      bridge_err_copied:'已复制 ✓',
+      bridge_err_back:'返回 Bridge',
+      bridge_err_retry:'重试',
+      bridge_err_resume_mint:'前往 History',
+      // Monetization
+      mon_title:'开发者抽成',
+      mon_desc:'Arc App Kit 的内置抽成功能：作为 dApp 开发者，可从每笔 Bridge / Send / Swap 中抽取一定比例的手续费。仅保存在本地 · 仅测试网。',
+      mon_enable:'启用抽成',
+      mon_fee_label:'抽成比例（基点）',
+      mon_fee_hint:'10 bps = 0.10% · 100 bps = 1% · 上限 500 bps (5%)',
+      mon_addr_label:'收款地址',
+      mon_addr_hint:'每次主交易前，会先把这笔手续费转给此地址',
+      // 表单标签
+      label_gas:'网络费用（预估）', label_creator_fee:'开发者抽成',
+      rate:'汇率',
+      agent_subtitle:'和 AI 代理对话。它会先规划、征求确认、然后执行真实的测试网交易。',
+      agent_btn_key:'Gemini API 密钥',
+      agent_examples:'试试这些',
+      agent_empty:'问 AI 代理任何关于你的测试网 USDC 的问题。',
+      agent_send:'发送',
+      agent_disclaimer:'AI 可能出错。每笔交易都需要你明确批准。仅限测试网。',
+      badge_live:'4 条测试网 · 在线',
+      badge_cctp:'CCTP 原生双向跨链',
+      hero_title:'跨链 USDC Bridge',
+      hero_desc:'CCTP V2 协议 · 亚秒级确认 · 支持 4 条测试网',
+      label_from:'从哪里出发', label_to:'目的地', label_amount:'跨链数量', label_balance:'余额：',
+      btn_connect:'连接钱包', btn_bridge:'开始跨链',
+      faucets_title:'测试网领水',
+      faucets_hint:'所有 USDC 领水都用 Circle Faucet，进去后选择对应网络',
+      defi_subtitle:'Send 和余额查询支持全部 4 条测试网。Swap 是 UI 演示（真实 DEX 即将上线）。',
+      swap_kitkey:'真实集成需申请 Circle Console Kit Key',
+      swap_pay:'支付', swap_receive:'获得（预估）',
+      swap_rate_label:'模拟汇率', swap_slippage:'滑点保护',
+      btn_swap:'执行 Swap（演示）',
+      send_subtitle:'同链 ERC-20 USDC 转账',
+      send_path:'发送路径', send_from:'从',
+      send_to_label:'到（同链接收）', send_asset:'发送资产',
+      send_address:'接收地址', send_amount:'数量',
+      btn_send:'发送（演示）',
+      ub_subtitle:'查看所有 CCTP 链上的实时 USDC 余额',
+      ub_notice:'你的 USDC 分散在多条链上。Bridge 到 Arc 即可用于 Swap 和 DeFi。',
+      ub_ready:'✓ 可直接使用', ub_needs_bridge:'⚠ 需先 Bridge',
+      ub_available:'多链 USDC 总余额',
+      btn_ub:'获取实时余额',
+      progress_title:'CCTP 双向跨链进行中…',
+      progress_step1:'在以下链授权 USDC：', progress_step2:'在以下链销毁 USDC：',
+      progress_step3:'在以下链领取 + 铸造：',
+      progress_phase_1_switching:'正在切换钱包到 {from}…',
+      progress_phase_1_approving:'在 {from} 上授权 USDC 使用权限…',
+      progress_phase_2_burning:'在 {from} 上销毁 {amount} USDC…',
+      progress_phase_3_attesting:'等待 Circle Attestation 签名…（标准模式 10–30 秒）',
+      progress_phase_3_minting:'在 {to} 上铸造 {amount} USDC…',
+      result_title:'跨链成功', result_time:'确认时间：',
+      result_speed:'亚秒级', result_blocks:'约 1 个区块',
+      btn_again:'再跨一次', btn_continue_defi:'继续 DeFi Actions',
+      footer_main:'Arc Bridge Kit 官方演示 · 仅用于测试网',
+      footer_sub:'所有 DeFi 操作均为前端演示 ·',
+      footer_docs:'真实集成请参考官方文档',
+      modal_title:'连接钱包',
+      wallet_metamask_sub:'浏览器扩展',
+      wallet_wc_sub:'手机钱包扫码',
+      wallet_other:'其他钱包', btn_cancel:'取消',
+      kit_key_title:'Circle Kit Key',
+      kit_key_desc1:'到',
+      kit_key_desc2:'→ Keys → Create Kit Key 申请。',
+      kit_key_warn:'请在 Console 配置域名白名单 — 任何访问你页面的人都能读到这个 key。',
+      kit_key_storage:'仅保存在你的浏览器（localStorage），不会写进代码。',
+      kit_key_label:'Kit Key',
+      kit_key_show:'显示密钥',
+      kit_key_save:'保存',
+      kit_key_clear:'清除',
+      // dynamic
+      alert_connect_wallet:'请先连接钱包。',
+      alert_install_mm:'请安装 MetaMask。',
+      alert_amount:'请输入大于 0 的数量。',
+      alert_same_chain:'起点和终点不能相同。',
+      alert_invalid_addr:'请输入有效的 EVM 钱包地址。',
+      status_bridged:'跨链完成。现在可以在 Arc Testnet 上继续 Swap、Send 或查看统一余额。',
+      status_swap_done:'Swap 演示完成：在 Arc Testnet 上用 {amt} {from} 预计获得 {to} {toTok}。',
+      status_send_done:'Send 演示完成：从 {chain} 发送 {amt} {token} 到 {addr}（同链）。',
+      status_ub_fetching:'正在获取两条链的实时余额…',
+      connected_prefix:'已连接', wc_connected:'WalletConnect 已连接',
+      other_connected:'其他钱包已连接',
+      success_bridged:'{amt} USDC 已从 <span class="font-semibold">{from}</span><br>成功跨链到 <span class="font-semibold">{to}</span>',
+      success_total_input:'输入总额',
+      success_creator_fee:'开发者抽成',
+      success_bridged_minted:'实际跨链并铸造',
+      success_fee_tx:'抽成交易',
+      success_approve_tx:'授权交易',
+      success_burn_tx:'{chain} 上的 Burn 交易',
+      success_mint_tx:'{chain} 上的 Mint 交易',
+    }
+  };
+
+  let currentLang = 'en';
+  function t(k) { return I18N[currentLang][k] ?? I18N.en[k] ?? k; }
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    document.getElementById('btnEN').classList.toggle('lang-btn-active', lang === 'en');
+    document.getElementById('btnZH').classList.toggle('lang-btn-active', lang === 'zh');
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const val = t(key);
+      // use innerHTML only when the translation actually contains markup
+      if (/<[a-z]/i.test(val)) {
+        el.innerHTML = val;
+      } else {
+        el.textContent = val;
+      }
+    });
+    document.title = lang === 'zh'
+      ? '跨链 USDC Bridge | CCTP V2 演示'
+      : 'Cross-Chain USDC Bridge | CCTP V2 Demo';
+    updateConnectBtnLang();
+  }
+
+  function updateConnectBtnLang() {
+    if (!account) return;
+    const btn = document.getElementById('connectBtn');
+    if (account.startsWith('0xWalletConnect')) {
+      btn.innerHTML = `<i class="fas fa-qrcode text-[#3b99fc]"></i> ${t('wc_connected')}`;
+    } else if (account.startsWith('0xOther')) {
+      btn.innerHTML = `<i class="fas fa-check-circle text-emerald-400"></i> ${t('other_connected')}`;
+    } else {
+      btn.innerHTML = `<i class="fas fa-check-circle text-emerald-400"></i> ${t('connected_prefix')} ${account.slice(0,6)}…${account.slice(-4)}`;
+    }
+    renderIcons(btn);
+  }
+
+  // ── App state ─────────────────────────────────────────
+  let account = null, currentMode = 'bridge';
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('bridgePanel').classList.toggle('hidden', mode !== 'bridge');
+    document.getElementById('defiPanel').classList.toggle('hidden', mode !== 'defi');
+    const histPanel = document.getElementById('historyPanel');
+    if (histPanel) histPanel.classList.toggle('hidden', mode !== 'history');
+    const agentPanel = document.getElementById('agentPanel');
+    if (agentPanel) agentPanel.classList.toggle('hidden', mode !== 'agent');
+    document.getElementById('progressPanel').classList.add('hidden');
+    document.getElementById('resultPanel').classList.add('hidden');
+    document.getElementById('bridgeTab').dataset.active = mode === 'bridge';
+    document.getElementById('defiTab').dataset.active = mode === 'defi';
+    const histTab = document.getElementById('historyTab');
+    if (histTab) histTab.dataset.active = mode === 'history';
+    const agentTab = document.getElementById('agentTab');
+    if (agentTab) agentTab.dataset.active = mode === 'agent';
+    if (mode === 'history') renderHistory();
+    if (mode === 'agent') updateAgentKeyDot();
+  }
+
+  // ── Wallet ────────────────────────────────────────────
+  function showWalletModal() { document.getElementById('walletModal').classList.remove('hidden'); }
+  function hideWalletModal() { document.getElementById('walletModal').classList.add('hidden'); }
+
+  // ── Kit Key modal ────────────────────────────────────
+  function showKitKeyModal() {
+    document.getElementById('kitKeyInput').value = CIRCLE_KIT_KEY || '';
+    document.getElementById('kitKeyStatus').classList.add('hidden');
+    document.getElementById('kitKeyModal').classList.remove('hidden');
+  }
+  function hideKitKeyModal() { document.getElementById('kitKeyModal').classList.add('hidden'); }
+  function toggleKitKeyVisibility() {
+    const input = document.getElementById('kitKeyInput');
+    input.type = document.getElementById('kitKeyShow').checked ? 'text' : 'password';
+  }
+  function saveKitKey() {
+    const v = document.getElementById('kitKeyInput').value.trim();
+    setKitKey(v);
+    const s = document.getElementById('kitKeyStatus');
+    s.textContent = v ? '✓ Saved to browser localStorage' : '✓ Cleared';
+    s.classList.remove('hidden');
+    s.classList.toggle('text-emerald-300', !!v);
+    s.classList.toggle('text-amber-300', !v);
+    setTimeout(() => hideKitKeyModal(), 1200);
+    updateKitKeyBtnDot();
+  }
+  function clearKitKey() {
+    document.getElementById('kitKeyInput').value = '';
+    setKitKey('');
+    const s = document.getElementById('kitKeyStatus');
+    s.textContent = '✓ Cleared';
+    s.className = 'mt-3 text-[11px] text-amber-300 text-center';
+    updateKitKeyBtnDot();
+  }
+  function updateKitKeyBtnDot() {
+    // green dot if a key is configured, otherwise no dot
+    const btn = document.getElementById('kitKeyBtn');
+    if (!btn) return;
+    let dot = btn.querySelector('.kit-key-dot');
+    if (CIRCLE_KIT_KEY) {
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = 'kit-key-dot absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full';
+        btn.style.position = 'relative';
+        btn.appendChild(dot);
+      }
+    } else if (dot) dot.remove();
+  }
+
+  // ── Monetization modal ────────────────────────────────
+  function showMonetizationModal() {
+    document.getElementById('monEnabled').checked = !!MONETIZATION.enabled;
+    document.getElementById('monFeeBps').value = MONETIZATION.feeBps || 10;
+    document.getElementById('monRecipient').value = MONETIZATION.recipient || '';
+    updateMonFeePct();
+    updateMonUiState();
+    document.getElementById('monStatus').classList.add('hidden');
+    document.getElementById('monModal').classList.remove('hidden');
+  }
+  function hideMonetizationModal() { document.getElementById('monModal').classList.add('hidden'); }
+  function updateMonUiState() {
+    const enabled = document.getElementById('monEnabled').checked;
+    document.getElementById('monFields').classList.toggle('opacity-40', !enabled);
+    document.getElementById('monFields').classList.toggle('pointer-events-none', !enabled);
+  }
+  function updateMonFeePct() {
+    const bps = parseInt(document.getElementById('monFeeBps').value) || 0;
+    document.getElementById('monFeePct').textContent = `= ${(bps / 100).toFixed(2)}%`;
+  }
+  function saveMonetizationConfig() {
+    const enabled = document.getElementById('monEnabled').checked;
+    const feeBps = parseInt(document.getElementById('monFeeBps').value) || 0;
+    const recipient = document.getElementById('monRecipient').value.trim();
+    if (enabled) {
+      if (feeBps < 1 || feeBps > 500) {
+        const s = document.getElementById('monStatus');
+        s.textContent = '⚠ Fee must be between 1 and 500 bps';
+        s.className = 'mt-3 text-[11px] text-amber-300 text-center';
+        return;
+      }
+      if (!/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
+        const s = document.getElementById('monStatus');
+        s.textContent = '⚠ Invalid recipient address';
+        s.className = 'mt-3 text-[11px] text-amber-300 text-center';
+        return;
+      }
+    }
+    MONETIZATION = { enabled, feeBps, recipient };
+    saveMonetization();
+    const s = document.getElementById('monStatus');
+    s.textContent = enabled ? `✓ Enabled — ${(feeBps/100).toFixed(2)}% to ${recipient.slice(0,6)}…${recipient.slice(-4)}` : '✓ Disabled';
+    s.className = 'mt-3 text-[11px] text-emerald-300 text-center';
+    updateMonBtnDot();
+    updateFeeRows();
+    setTimeout(() => hideMonetizationModal(), 1200);
+  }
+  function updateMonBtnDot() {
+    const btn = document.getElementById('monBtn');
+    if (!btn) return;
+    let dot = btn.querySelector('.mon-dot');
+    if (MONETIZATION.enabled) {
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = 'mon-dot absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full';
+        btn.appendChild(dot);
+      }
+    } else if (dot) dot.remove();
+  }
+  // Show/hide creator fee row in forms based on current input amount
+  function updateFeeRows() {
+    const bridgeAmt = document.getElementById('amount')?.value;
+    const bRow = document.getElementById('bridgeFeeRow');
+    const bAmt = document.getElementById('bridgeFeeAmt');
+    const bFee = getFeeAmount(bridgeAmt);
+    if (bRow) bRow.classList.toggle('hidden', !bFee);
+    if (bFee && bAmt) bAmt.textContent = `-${bFee.feeUsdc.toFixed(4)} USDC (${(bFee.bps/100).toFixed(2)}%)`;
+    const sendAmt = document.getElementById('sendAmount')?.value;
+    const sRow = document.getElementById('sendFeeRow');
+    const sAmt = document.getElementById('sendFeeAmt');
+    const sFee = getFeeAmount(sendAmt);
+    if (sRow) sRow.classList.toggle('hidden', !sFee);
+    if (sFee && sAmt) sAmt.textContent = `-${sFee.feeUsdc.toFixed(4)} USDC`;
+  }
+
+  async function connectMetaMask() {
+    hideWalletModal();
+    if (!hasEthereum()) { alert(t('alert_install_mm')); return; }
+    if (!hasEthers())   { alert('ethers.js failed to load. Check network connection.'); return; }
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      account = accounts[0];
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      const btn = document.getElementById('connectBtn');
+      btn.innerHTML = `<i class="fas fa-check-circle text-emerald-500"></i> ${t('connected_prefix')} ${account.slice(0,6)}…${account.slice(-4)}`;
+      btn.className = btn.className.replace('bg-white text-black','') + ' !bg-emerald-400 !text-black';
+      renderIcons(btn);
+
+      // Listen for account / chain changes (dedup: remove any previous handlers first)
+      if (window.__walletHandlers) {
+        window.ethereum.removeListener('accountsChanged', window.__walletHandlers.acc);
+        window.ethereum.removeListener('chainChanged', window.__walletHandlers.chain);
+      }
+      const accHandler = (accs) => {
+        if (accs.length === 0) {
+          // Disconnect: clean state (don't reload — preserves agent chat etc.)
+          account = null; signer = null;
+          if (window.__balanceTimer) { clearInterval(window.__balanceTimer); window.__balanceTimer = null; }
+          window.__balances = {};
+          const cb = document.getElementById('connectBtn');
+          cb.innerHTML = `<i class="fas fa-wallet text-purple-700"></i> <span data-i18n="btn_connect">${t('btn_connect')}</span>`;
+          cb.className = cb.className.replace('!bg-emerald-400 !text-black','') + ' bg-white text-black';
+          renderIcons(cb);
+          refreshBridgeBalance(); refreshSendBalance(); refreshSwapBalance();
+        } else {
+          account = accs[0];
+          updateConnectBtnLang();
+          refreshAllBalances();
+          updateBridgeGasEstimate();
+          updateSendGasEstimate();
+        }
+      };
+      const chainHandler = async () => {
+        // Re-init provider + signer for new chain, then refresh all chain-derived UI
+        try {
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+        } catch(e) { console.warn('Re-init signer failed:', e); }
+        refreshAllBalances();
+        updateBridgeGasEstimate();
+        updateSendGasEstimate();
+      };
+      window.ethereum.on('accountsChanged', accHandler);
+      window.ethereum.on('chainChanged', chainHandler);
+      window.__walletHandlers = { acc: accHandler, chain: chainHandler };
+
+      // auto-fetch real balances immediately + periodic refresh every 30s
+      refreshAllBalances();
+      updateBridgeGasEstimate();
+      updateSendGasEstimate();
+      updateFeeRows();
+      if (window.__balanceTimer) clearInterval(window.__balanceTimer);
+      window.__balanceTimer = setInterval(() => refreshAllBalances(), 30_000);
+    } catch(e) {
+      console.error('Connect failed:', e);
+    }
+  }
+  function connectWalletConnect() {
+    hideWalletModal();
+    alert('WalletConnect integration coming soon. Please use MetaMask for now.');
+  }
+  function connectOther() {
+    hideWalletModal();
+    alert('Rainbow / OKX / Rabby integration coming soon. Please use MetaMask for now.');
+  }
+
+  // ── Bridge ────────────────────────────────────────────
+  function swapChains() {
+    const f = document.getElementById('fromChain'), t2 = document.getElementById('toChain');
+    const tmp = f.value; f.value = t2.value; t2.value = tmp;
+    const btn = document.getElementById('swapChainsBtn');
+    btn.classList.add('flip-h');
+    setTimeout(() => btn.classList.remove('flip-h'), 300);
+    checkSameChain();
+    refreshBridgeBalance();
+  }
+
+  // ── Prevent selecting the same chain on both sides ───
+  // Called from both fromChain and toChain onchange. The `changed` arg
+  // tells us which side the user just touched; we move the OTHER side.
+  function checkSameChain(changed) {
+    const fromSel = document.getElementById('fromChain');
+    const toSel = document.getElementById('toChain');
+    if (fromSel.value !== toSel.value) return;
+    // collision: jump the side the user didn't touch to the first non-matching chain
+    const otherSel = changed === 'to' ? fromSel : toSel;
+    const cur = changed === 'to' ? toSel.value : fromSel.value;
+    const alt = CHAIN_KEYS.find(k => k !== cur);
+    if (alt) otherSel.value = alt;
+  }
+
+  // ── Bridge confirmation modal (Promise-based) ─────────
+  let _bridgeConfirmResolve = null;
+  function confirmBridge({ fromKey, toKey, fromName, toName, amountStr }) {
+    const feeInfo = getFeeAmount(amountStr);
+    const amt = parseFloat(amountStr);
+    const recipientGets = feeInfo ? feeInfo.netUsdc.toFixed(4) : amt.toFixed(4);
+
+    document.getElementById('bcFromChain').textContent = fromName;
+    document.getElementById('bcToChain').textContent = toName;
+    document.getElementById('bcTotalIn').textContent = `${amt.toFixed(4)} USDC`;
+    document.getElementById('bcRecipientGets').textContent = `${recipientGets} USDC`;
+
+    const feeRow = document.getElementById('bcFeeRow');
+    const feeWarn = document.getElementById('bcFeeWarn');
+    if (feeInfo) {
+      feeRow.classList.remove('hidden');
+      feeWarn.classList.remove('hidden');
+      document.getElementById('bcFeeAmt').textContent = `-${feeInfo.feeUsdc.toFixed(4)} USDC (${(feeInfo.bps/100).toFixed(2)}%)`;
+    } else {
+      feeRow.classList.add('hidden');
+      feeWarn.classList.add('hidden');
+    }
+
+    // Estimate signature count: fee (optional) + approve (optional, skipped if already approved) + burn + receiveMessage
+    // We don't pre-check allowance here (it would require an async RPC call before the modal opens),
+    // so we show the MAX count + range, and clearly mark approve as optional.
+    const sigList = [];
+    if (feeInfo) sigList.push({ label: t('bc_sig_fee'), note: `→ ${feeInfo.recipient.slice(0,6)}…${feeInfo.recipient.slice(-4)}`, optional: false });
+    sigList.push({ label: t('bc_sig_approve'), note: t('bc_sig_approve_note'), optional: true });
+    sigList.push({ label: t('bc_sig_burn'), note: `${fromName}`, optional: false });
+    sigList.push({ label: t('bc_sig_mint'), note: `${toName}`, optional: false });
+    const minCount = sigList.filter(s => !s.optional).length;
+    const maxCount = sigList.length;
+    document.getElementById('bcSigCount').textContent = minCount === maxCount ? `${maxCount}` : `${minCount}-${maxCount}`;
+    document.getElementById('bcSigList').innerHTML = sigList.map((s, i) =>
+      `<li class="flex items-start gap-2">
+        <span class="text-purple-400 font-mono text-[10px] mt-0.5">${i+1}.</span>
+        <span class="flex-1">
+          <span class="text-white/90">${s.label}</span>
+          ${s.optional ? `<span class="text-[9px] text-purple-400/60 ml-1 uppercase tracking-wider">(${t('bc_optional')})</span>` : ''}
+          <span class="text-purple-300/60">— ${s.note}</span>
+        </span>
+      </li>`
+    ).join('');
+
+    document.getElementById('bridgeConfirmModal').classList.remove('hidden');
+    renderIcons(document.getElementById('bridgeConfirmModal'));
+    return new Promise(resolve => { _bridgeConfirmResolve = resolve; });
+  }
+  function resolveBridgeConfirm(confirmed) {
+    document.getElementById('bridgeConfirmModal').classList.add('hidden');
+    if (_bridgeConfirmResolve) {
+      const r = _bridgeConfirmResolve;
+      _bridgeConfirmResolve = null;
+      r(confirmed);
+    }
+  }
+
+  async function startBridge() {
+    if (!account) { alert(t('alert_connect_wallet')); showWalletModal(); return; }
+    const amtInput = document.getElementById('amount');
+    const amount = parseFloat(amtInput.value);
+    if (!amount || amount <= 0) { alert(t('alert_amount')); amtInput.focus(); return; }
+    const fromSel = document.getElementById('fromChain');
+    const toSel = document.getElementById('toChain');
+    const fromKey = fromSel.value;
+    const toKey   = toSel.value;
+    const from = fromSel.options[fromSel.selectedIndex].text;
+    const to   = toSel.options[toSel.selectedIndex].text;
+    if (from === to) { alert(t('alert_same_chain')); return; }
+
+    // P0-2: confirmation modal — show breakdown + signature count before any wallet pop-up
+    const confirmed = await confirmBridge({
+      fromKey, toKey, fromName: from, toName: to, amountStr: amtInput.value,
+    });
+    if (!confirmed) return;
+
+    document.getElementById('bridgePanel').classList.add('hidden');
+    document.getElementById('progressPanel').classList.remove('hidden');
+
+    document.getElementById('progressSteps').innerHTML = `
+      <div id="pStep1" class="flex items-start gap-4 transition-opacity duration-500">
+        <div id="pNum1" class="w-8 h-8 bg-purple-500/30 border border-purple-400/40 text-purple-300 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0">1</div>
+        <div class="flex-1 pt-1">
+          <div id="pLbl1" class="text-sm text-white/80">${t('progress_step1')} ${from}</div>
+          <div class="h-1.5 bg-white/10 rounded-full mt-3 overflow-hidden"><div id="pBar1" class="progress-bar w-0 bg-purple-400 h-1.5 rounded-full"></div></div>
+        </div>
+      </div>
+      <div id="pStep2" class="flex items-start gap-4 transition-opacity duration-500 opacity-30">
+        <div id="pNum2" class="w-8 h-8 bg-purple-500/30 border border-purple-400/40 text-purple-300 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0">2</div>
+        <div class="flex-1 pt-1">
+          <div id="pLbl2" class="text-sm text-white/80">${t('progress_step2')} ${from}</div>
+          <div class="h-1.5 bg-white/10 rounded-full mt-3 overflow-hidden"><div id="pBar2" class="progress-bar w-0 bg-purple-400 h-1.5 rounded-full"></div></div>
+        </div>
+      </div>
+      <div id="pStep3" class="flex items-start gap-4 transition-opacity duration-500 opacity-30">
+        <div id="pNum3" class="w-8 h-8 bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0">3</div>
+        <div class="flex-1 pt-1">
+          <div id="pLbl3" class="text-sm text-emerald-300">${t('progress_step3')} ${to}</div>
+          <div class="h-1.5 bg-white/10 rounded-full mt-3 overflow-hidden"><div id="pBar3" class="progress-bar w-0 bg-emerald-400 h-1.5 rounded-full"></div></div>
+        </div>
+      </div>`;
+
+    // Step callback updates UI as CCTP proceeds — all phrases via i18n
+    const onStep = (step, phase) => {
+      const lbl = document.getElementById(`pLbl${step}`);
+      if (lbl) {
+        const tpl = t(`progress_phase_${step}_${phase}`);
+        // fallback to existing label if no translation
+        if (tpl && tpl !== `progress_phase_${step}_${phase}`) {
+          lbl.textContent = tpl.replace('{from}', from).replace('{to}', to).replace('{amount}', amount);
+        }
+      }
+      // mark previous steps complete
+      for (let i = 1; i <= step; i++) {
+        document.getElementById(`pStep${i}`).classList.remove('opacity-30');
+        document.getElementById(`pBar${i}`).style.width = i < step ? '100%' : '60%';
+      }
+    };
+
+    try {
+      const result = await realBridgeUSDC(fromKey, toKey, amtInput.value, account, onStep);
+      document.getElementById('pBar3').style.width = '100%';
+      // History already updated to 'confirmed' inside realBridgeUSDC via updateTxStatus()
+      setTimeout(() => {
+        document.getElementById('progressPanel').classList.add('hidden');
+        document.getElementById('resultPanel').classList.remove('hidden');
+        const fromName = CHAINS[fromKey].name, toName = CHAINS[toKey].name;
+        // Show full breakdown — total input, fee (if any), bridged amount, recipient
+        const feeRow = result.feeUsdc
+          ? `<div class="flex justify-between"><span class="text-amber-300/80">${t('success_creator_fee')}</span><span class="font-mono text-amber-300">-${result.feeUsdc.toFixed(4)} USDC</span></div>`
+          : '';
+        document.getElementById('successText').innerHTML = `
+          <div class="text-lg font-semibold mb-3">${t('success_bridged').replace('{amt}', result.bridgedAmount).replace('{from}', fromName).replace('{to}', toName)}</div>
+          <div class="bg-black/30 border border-white/10 rounded-xl p-3 text-[12px] space-y-1.5 mt-3 text-left">
+            <div class="flex justify-between"><span class="text-purple-300/80">${t('success_total_input')}</span><span class="font-mono text-white/90">${result.totalAmount} USDC</span></div>
+            ${feeRow}
+            <div class="flex justify-between font-semibold pt-1 border-t border-white/10"><span class="text-emerald-300/90">${t('success_bridged_minted')}</span><span class="font-mono text-emerald-300">${result.bridgedAmount} USDC</span></div>
+          </div>
+          <div class="text-xs mt-3 space-y-1 text-left">
+            ${result.feeExplorerUrl ? `<a href="${result.feeExplorerUrl}" target="_blank" class="text-amber-400/80 hover:text-amber-300 underline block">${t('success_fee_tx')} ↗</a>` : ''}
+            ${result.approveExplorerUrl ? `<a href="${result.approveExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_approve_tx')} ↗</a>` : ''}
+            <a href="${result.sourceExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_burn_tx').replace('{chain}', fromName)} ↗</a>
+            <a href="${result.destExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_mint_tx').replace('{chain}', toName)} ↗</a>
+          </div>`;
+      }, 600);
+      refreshAllBalances();
+    } catch (e) {
+      const msg = e?.shortMessage || e?.reason || e?.message || String(e);
+      console.error('Bridge error:', e);
+      // P1-1/P1-2: recoverable = burn succeeded but attestation timed out OR mint failed
+      // History record was already created with status='burned_waiting_mint' inside realBridgeUSDC.
+      // If unrecoverable (failed BEFORE burn), record a regular 'failed' entry now.
+      const isRecoverable = e?.recoverable && e?.burnHash;
+      if (!isRecoverable) {
+        recordTx({
+          type: 'bridge', fromChain: fromKey, toChain: toKey,
+          amount: fmtAmount(amtInput.value),
+          token: 'USDC', status: 'failed',
+        });
+      }
+      const burnExplorerUrl = isRecoverable ? `${CHAINS[fromKey].explorer}/tx/${e.burnHash}` : null;
+      const safeMsg = msg.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'})[c]);
+      const stageLabel = e?.recoveryStage === 'mint' ? t('bridge_err_mint_pending')
+                       : e?.recoveryStage === 'attestation' ? t('bridge_err_attestation_pending')
+                       : t('bridge_err_failed');
+      document.getElementById('progressSteps').innerHTML = `
+        <div class="bg-red-500/10 border border-red-400/40 rounded-2xl p-5">
+          <div class="flex items-start gap-3">
+            <i class="fas fa-circle-xmark text-red-400 text-lg shrink-0 mt-0.5"></i>
+            <div class="flex-1 text-sm text-red-200 leading-relaxed">
+              <div class="font-semibold mb-2">${stageLabel}</div>
+              <div class="text-xs text-red-200/90 break-words bg-black/30 rounded-lg p-3 font-mono" id="bridgeErrText">${safeMsg}</div>
+              ${isRecoverable ? `
+                <div class="mt-3 text-xs text-emerald-200/90 bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-3">
+                  <div class="font-semibold mb-1">✓ ${t('bridge_err_funds_safe_title')}</div>
+                  ${t('bridge_err_funds_safe_body').replace('{from}', CHAINS[fromKey].name)}
+                </div>
+                <a href="${burnExplorerUrl}" target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1.5 mt-2 text-xs text-purple-300 hover:text-white underline">
+                  <i class="fas fa-up-right-from-square text-[10px]"></i>
+                  ${t('bridge_err_view_burn').replace('{from}', CHAINS[fromKey].name)}
+                </a>` : ''}
+            </div>
+          </div>
+          <div class="mt-4 flex gap-2 flex-wrap">
+            <button onclick="navigator.clipboard.writeText(document.getElementById('bridgeErrText').textContent).then(()=>this.textContent='${t('bridge_err_copied')}')"
+                    class="px-3 py-2.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-xl text-xs text-white/70 transition">
+              <i class="fas fa-copy text-[10px] mr-1"></i> ${t('bridge_err_copy')}
+            </button>
+            <button onclick="document.getElementById('progressPanel').classList.add('hidden'); document.getElementById('bridgePanel').classList.remove('hidden');"
+                    class="flex-1 py-2.5 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl text-xs font-medium transition">
+              ${t('bridge_err_back')}
+            </button>
+            ${isRecoverable ? `
+              <button onclick="setMode('history')"
+                      class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-xs font-semibold transition text-white">
+                <i class="fas fa-arrow-right mr-1"></i> ${t('bridge_err_resume_mint')}
+              </button>` : `
+              <button onclick="startBridge()"
+                      class="flex-1 py-2.5 bg-purple-500 hover:bg-purple-400 rounded-xl text-xs font-semibold transition">
+                ${t('bridge_err_retry')}
+              </button>`}
+          </div>
+        </div>`;
+      renderIcons(document.getElementById('progressSteps'));
+    }
+  }
+
+  function switchToDeFiAfterBridge() {
+    document.getElementById('resultPanel').classList.add('hidden');
+    setMode('defi');
+    showDeFiStatus(t('status_bridged'));
+  }
+
+  function resetDemo() { location.reload(); }
+
+  // ── DeFi shared ───────────────────────────────────────
+  function requireWallet() {
+    if (account) return true;
+    alert(t('alert_connect_wallet')); showWalletModal(); return false;
+  }
+
+  function showDeFiStatus(message, tone = 'success') {
+    const el = document.getElementById('defiStatus');
+    const txt = document.getElementById('defiStatusText');
+    txt.textContent = message;
+    el.classList.remove('hidden');
+    el.className = (tone === 'error'
+      ? 'mb-5 rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200 flex items-start gap-2.5'
+      : 'mb-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 flex items-start gap-2.5');
+    const icon = el.querySelector('i');
+    if (icon) {
+      icon.className = tone === 'error' ? 'fas fa-circle-xmark mt-0.5 shrink-0' : 'fas fa-circle-check mt-0.5 shrink-0';
+      delete icon.dataset.svgRendered;
+      renderIcons(el);
+    }
+  }
+
+  // ── Swap ──────────────────────────────────────────────
+  const RATES = {
+    'USDC-EURC':0.9985,'EURC-USDC':1.0015,
+    'USDC-cirBTC':0.00001,'cirBTC-USDC':98000,
+    'EURC-cirBTC':0.00001,'cirBTC-EURC':97900,
+  };
+  function getRate(f,to) { return RATES[`${f}-${to}`]||1; }
+
+  function updateSwapQuote() {
+    const fromAmtRaw = document.getElementById('swapFromAmt').value;
+    const fromAmt = parseFloat(fromAmtRaw)||0;
+    const fromTok = document.getElementById('swapFromToken').value;
+    const toTok = document.getElementById('swapToToken').value;
+    const rate = getRate(fromTok, toTok);
+    const toEl = document.getElementById('swapToAmt');
+    if (fromAmtRaw === '' || fromAmt <= 0) {
+      // empty input — leave to-side empty so placeholder shows
+      toEl.value = '';
+    } else {
+      const result = fromAmt * rate;
+      toEl.value = result.toFixed(toTok==='cirBTC'?8:(fromTok==='cirBTC'?2:4));
+    }
+    document.getElementById('swapRate').textContent =
+      `1 ${fromTok} ≈ ${rate<0.01?rate.toFixed(8):rate.toFixed(4)} ${toTok}`;
+  }
+
+  function guardSameToken(changed) {
+    const fS = document.getElementById('swapFromToken');
+    const tS = document.getElementById('swapToToken');
+    if (fS.value === tS.value) {
+      const other = changed==='from'?tS:fS;
+      const cur = changed==='from'?fS.value:tS.value;
+      other.value = [...other.options].map(o=>o.value).find(v=>v!==cur)||other.options[0].value;
+    }
+  }
+
+  function flipSwap() {
+    const fS = document.getElementById('swapFromToken');
+    const tS = document.getElementById('swapToToken');
+    const fA = document.getElementById('swapFromAmt');
+    const tA = document.getElementById('swapToAmt');
+    const tmp = fS.value; fS.value = tS.value; tS.value = tmp;
+    const est = parseFloat(tA.value)||0;
+    if (est > 0) fA.value = est.toFixed(tmp==='cirBTC'?8:2);
+    const btn = document.getElementById('flipBtn');
+    btn.classList.add('flip-v');
+    setTimeout(()=>btn.classList.remove('flip-v'),300);
+    updateSwapQuote();
+  }
+
+  function demoSwap() {
+    if (!requireWallet()) return;
+    const fromAmt = parseFloat(document.getElementById('swapFromAmt').value);
+    if (!fromAmt||fromAmt<=0) { showDeFiStatus(t('alert_amount'),'error'); return; }
+    const toAmt = document.getElementById('swapToAmt').value;
+    const fromTok = document.getElementById('swapFromToken').value;
+    const toTok = document.getElementById('swapToToken').value;
+    showDeFiStatus(t('status_swap_done')
+      .replace('{amt}',fromAmt).replace('{from}',fromTok)
+      .replace('{to}',toAmt).replace('{toTok}',toTok));
+  }
+
+  // ── Populate all chain select dropdowns from CHAINS config ─────────
+  function populateChainSelects() {
+    // Bridge defaults: Arc is the demo's home chain → put it on FROM side
+    document.getElementById('fromChain').innerHTML = chainOptionsHTML('arc');
+    document.getElementById('toChain').innerHTML   = chainOptionsHTML('sepolia');
+    // Send: same-chain only, default to Arc
+    document.getElementById('sendChain').innerHTML = chainOptionsHTML('arc');
+  }
+
+  // ── Send ──────────────────────────────────────────────
+  function updateSendFlow() {
+    const key = document.getElementById('sendChain').value;
+    document.getElementById('sendToLabel').textContent = CHAINS[key]?.name || key;
+  }
+
+  async function demoSend() {
+    if (!requireWallet()) return;
+    const chainKey = document.getElementById('sendChain').value;
+    const cfg = CHAINS[chainKey];
+    const token = document.getElementById('sendToken').value;
+    const addr = document.getElementById('sendAddress').value;
+    const amtRaw = document.getElementById('sendAmount').value;
+    const amt = parseFloat(amtRaw);
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) { showDeFiStatus(t('alert_invalid_addr'),'error'); return; }
+    if (!amt || amt <= 0) { showDeFiStatus(t('alert_amount'),'error'); return; }
+
+    const btn = event && event.currentTarget;
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    try {
+      showDeFiStatus(`⏳ Switching to ${cfg.name} & sending ${amt} ${token}…`);
+      const result = await realSendUSDC(chainKey, addr, amtRaw);
+      // Record in history
+      recordTx({
+        type: 'send',
+        fromChain: chainKey,
+        amount: fmtAmount(amtRaw),
+        token,
+        hash: result.hash,
+        explorerUrl: result.explorerUrl,
+        status: 'pending',
+        fee: result.feeUsdc,
+      });
+      const feeNote = result.feeUsdc ? ` (creator fee: ${result.feeUsdc.toFixed(4)} USDC)` : '';
+      showDeFiStatus(
+        `✅ Sent on ${cfg.name}!${feeNote} TX: ${result.hash.slice(0,10)}…${result.hash.slice(-8)}. ` +
+        `View on explorer: ${result.explorerUrl}`
+      );
+      result.wait().then(() => {
+        refreshAllBalances();
+        // update history record status to confirmed
+        const list = loadHistory();
+        const idx = list.findIndex(e => e.hash === result.hash);
+        if (idx >= 0) { list[idx].status = 'confirmed'; localStorage.setItem(TX_HISTORY_KEY, JSON.stringify(list)); renderHistoryIfVisible(); }
+      }).catch(()=>{});
+    } catch (e) {
+      const msg = e?.shortMessage || e?.reason || e?.message || 'Transaction failed';
+      showDeFiStatus(`❌ ${msg}`, 'error');
+      console.error('Send failed:', e);
+      // Record failed tx if we got far enough
+      recordTx({
+        type: 'send', fromChain: chainKey, amount: fmtAmount(amtRaw),
+        token, status: 'failed',
+      });
+    } finally {
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+  }
+
+  // ── Unified Balance ───────────────────────────────────
+  async function demoUnifiedBalance() {
+    if (!requireWallet()) return;
+    showDeFiStatus(t('status_ub_fetching'));
+    try {
+      await refreshAllBalances();
+      const total = document.getElementById('ubTotal').textContent;
+      // find chain with biggest non-featured balance to suggest bridging
+      let suggestion = '';
+      for (const k of CHAIN_KEYS) {
+        if (CHAINS[k].featured) continue;
+        const balEl = document.getElementById(`ubBal_${k}`);
+        const balText = balEl ? parseFloat(balEl.textContent) : 0;
+        if (balText > 0) {
+          suggestion = ` Bridge ${CHAINS[k].name} USDC to Arc to use it in Swap.`;
+          break;
+        }
+      }
+      showDeFiStatus(`✅ Total USDC across all chains: ${total}.${suggestion}`);
+    } catch (e) {
+      showDeFiStatus(`❌ Balance fetch failed: ${e?.message || e}`, 'error');
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────
+  window.onload = () => {
+    populateChainSelects();
+    renderIcons();
+    setLang('en');
+    setMode('bridge');
+    checkSameChain();
+    updateSwapQuote();
+    updateSendFlow();
+    updateKitKeyBtnDot();
+    updateMonBtnDot();
+    updateFeeRows();
+    updateAgentKeyDot();
+  };
+  </script>
+</body>
+</html>

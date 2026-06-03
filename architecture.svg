@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" role="img">
+  <title>Arc Agentic USDC architecture diagram</title>
+  <desc>Three-tier architecture showing the user and MetaMask on the left, the single-file frontend with five modules in the middle, and the external services on the right: Gemini API, Circle Iris API, and the four testnet RPC endpoints. Arrows show natural-language prompts flowing to Gemini, function calls dispatching to local tools, and signed transactions flowing through MetaMask to the chains.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      .bg { fill: #faf8f5; }
+      .title { font-size: 11px; font-weight: 600; fill: #1a1a2e; }
+      .sub { font-size: 9.5px; fill: #4a4a5e; }
+      .tier { font-size: 10px; fill: #888; font-weight: 500; }
+      .c-purple { fill: #ede7fe; stroke: #7F77DD; }
+      .c-pink { fill: #fdebf3; stroke: #D4537E; }
+      .c-teal { fill: #e0f5ed; stroke: #1D9E75; }
+      .c-blue { fill: #e1efff; stroke: #378ADD; }
+      .c-amber { fill: #fef3e0; stroke: #d4a553; }
+      .c-gray { fill: #f5f3ef; stroke: #aaa; }
+    </style>
+  </defs>
+
+  <!-- Page background -->
+  <rect class="bg" width="680" height="580"/>
+
+  <!-- Tier labels -->
+  <text class="tier" x="80" y="30" text-anchor="middle">User layer</text>
+  <text class="tier" x="340" y="30" text-anchor="middle">Frontend (single HTML file)</text>
+  <text class="tier" x="600" y="30" text-anchor="middle">External services</text>
+
+  <!-- USER (left column) -->
+  <rect class="c-purple" x="20" y="50" width="120" height="56" rx="8" stroke-width="0.8"/>
+  <text class="title" x="80" y="72" text-anchor="middle" dominant-baseline="central">User</text>
+  <text class="sub" x="80" y="90" text-anchor="middle" dominant-baseline="central">Browser + MetaMask</text>
+
+  <rect class="c-purple" x="20" y="130" width="120" height="56" rx="8" stroke-width="0.8"/>
+  <text class="title" x="80" y="152" text-anchor="middle" dominant-baseline="central">MetaMask</text>
+  <text class="sub" x="80" y="170" text-anchor="middle" dominant-baseline="central">Signs every tx</text>
+
+  <!-- FRONTEND (center column) - outer container -->
+  <rect class="c-gray" x="180" y="50" width="320" height="320" rx="14" stroke-width="0.8"/>
+  <text class="sub" x="340" y="68" text-anchor="middle" dominant-baseline="central">ethers.js v6 · Tailwind · localStorage</text>
+
+  <!-- AI Agent module (highlighted - core of Track 4) -->
+  <rect class="c-pink" x="200" y="84" width="280" height="86" rx="10" stroke-width="1.5"/>
+  <text class="title" x="340" y="106" text-anchor="middle" dominant-baseline="central">AI Agent tab ★</text>
+  <text class="sub" x="340" y="124" text-anchor="middle" dominant-baseline="central">Chat UI + tool dispatcher</text>
+  <text class="sub" x="340" y="140" text-anchor="middle" dominant-baseline="central">6 tools: get_balances · bridge_usdc · send_usdc</text>
+  <text class="sub" x="340" y="156" text-anchor="middle" dominant-baseline="central">get_wallet_info · get_pending_bridges · resume_mint</text>
+
+  <!-- Bridge module -->
+  <rect class="c-teal" x="200" y="184" width="135" height="80" rx="8" stroke-width="0.8"/>
+  <text class="title" x="267" y="206" text-anchor="middle" dominant-baseline="central">Bridge tab</text>
+  <text class="sub" x="267" y="224" text-anchor="middle" dominant-baseline="central">CCTP V2 flow</text>
+  <text class="sub" x="267" y="240" text-anchor="middle" dominant-baseline="central">approve → burn</text>
+  <text class="sub" x="267" y="256" text-anchor="middle" dominant-baseline="central">poll → mint</text>
+
+  <!-- DeFi module -->
+  <rect class="c-teal" x="345" y="184" width="135" height="80" rx="8" stroke-width="0.8"/>
+  <text class="title" x="412" y="206" text-anchor="middle" dominant-baseline="central">DeFi tab</text>
+  <text class="sub" x="412" y="224" text-anchor="middle" dominant-baseline="central">Send · Swap</text>
+  <text class="sub" x="412" y="240" text-anchor="middle" dominant-baseline="central">Unified balance</text>
+  <text class="sub" x="412" y="256" text-anchor="middle" dominant-baseline="central">across 4 chains</text>
+
+  <!-- History module -->
+  <rect class="c-amber" x="200" y="278" width="135" height="76" rx="8" stroke-width="0.8"/>
+  <text class="title" x="267" y="300" text-anchor="middle" dominant-baseline="central">History tab</text>
+  <text class="sub" x="267" y="318" text-anchor="middle" dominant-baseline="central">localStorage log</text>
+  <text class="sub" x="267" y="334" text-anchor="middle" dominant-baseline="central">Resume Mint button</text>
+
+  <!-- Monetization module -->
+  <rect class="c-amber" x="345" y="278" width="135" height="76" rx="8" stroke-width="0.8"/>
+  <text class="title" x="412" y="300" text-anchor="middle" dominant-baseline="central">Monetization</text>
+  <text class="sub" x="412" y="318" text-anchor="middle" dominant-baseline="central">Creator fee bps</text>
+  <text class="sub" x="412" y="334" text-anchor="middle" dominant-baseline="central">Pre-tx transfer</text>
+
+  <!-- EXTERNAL SERVICES (right column) -->
+  <rect class="c-blue" x="540" y="84" width="120" height="86" rx="8" stroke-width="0.8"/>
+  <text class="title" x="600" y="106" text-anchor="middle" dominant-baseline="central">Gemini API</text>
+  <text class="sub" x="600" y="124" text-anchor="middle" dominant-baseline="central">2.5 Flash</text>
+  <text class="sub" x="600" y="140" text-anchor="middle" dominant-baseline="central">Function calling</text>
+  <text class="sub" x="600" y="156" text-anchor="middle" dominant-baseline="central">Free tier</text>
+
+  <rect class="c-teal" x="540" y="184" width="120" height="80" rx="8" stroke-width="0.8"/>
+  <text class="title" x="600" y="206" text-anchor="middle" dominant-baseline="central">Iris API</text>
+  <text class="sub" x="600" y="224" text-anchor="middle" dominant-baseline="central">Circle attestation</text>
+  <text class="sub" x="600" y="240" text-anchor="middle" dominant-baseline="central">Sandbox</text>
+  <text class="sub" x="600" y="256" text-anchor="middle" dominant-baseline="central">10–30s standard</text>
+
+  <rect class="c-purple" x="540" y="278" width="120" height="76" rx="8" stroke-width="0.8"/>
+  <text class="title" x="600" y="300" text-anchor="middle" dominant-baseline="central">4 testnet RPCs</text>
+  <text class="sub" x="600" y="318" text-anchor="middle" dominant-baseline="central">Arc · Sepolia</text>
+  <text class="sub" x="600" y="334" text-anchor="middle" dominant-baseline="central">Base · Arbitrum</text>
+
+  <!-- ARROWS -->
+  <!-- User → Agent (prompt) -->
+  <line x1="140" y1="78" x2="200" y2="120" marker-end="url(#arrow)" stroke="#7F77DD" stroke-width="1.2"/>
+  <!-- Agent → Gemini -->
+  <line x1="480" y1="120" x2="540" y2="120" marker-end="url(#arrow)" stroke="#378ADD" stroke-width="1.2"/>
+  <!-- Gemini → Agent (function call) -->
+  <line x1="540" y1="135" x2="480" y2="135" marker-end="url(#arrow)" stroke="#378ADD" stroke-width="1.2"/>
+  <!-- Agent → Bridge/DeFi (dispatch) -->
+  <line x1="340" y1="170" x2="340" y2="184" marker-end="url(#arrow)" stroke="#D4537E" stroke-width="1.2"/>
+  <!-- Bridge → Iris -->
+  <line x1="335" y1="220" x2="540" y2="220" marker-end="url(#arrow)" stroke="#1D9E75" stroke-width="1.2"/>
+  <!-- Iris → Bridge -->
+  <line x1="540" y1="235" x2="335" y2="235" marker-end="url(#arrow)" stroke="#1D9E75" stroke-width="1.2"/>
+  <!-- Bridge/DeFi → MetaMask (sign request) -->
+  <line x1="200" y1="220" x2="140" y2="158" marker-end="url(#arrow)" stroke="#7F77DD" stroke-width="1.2"/>
+  <!-- MetaMask → RPCs (signed tx) -->
+  <line x1="140" y1="170" x2="540" y2="310" marker-end="url(#arrow)" stroke="#7F77DD" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <!-- DeFi → RPCs (balance reads) -->
+  <line x1="480" y1="316" x2="540" y2="316" marker-end="url(#arrow)" stroke="#1D9E75" stroke-width="1.2"/>
+
+  <!-- LEGEND (bottom) -->
+  <rect x="40" y="410" width="600" height="140" rx="12" fill="none" stroke="#888" stroke-width="0.5" stroke-dasharray="4 3"/>
+  <text class="title" x="56" y="432" dominant-baseline="central">Data flow legend</text>
+
+  <line x1="56" y1="458" x2="86" y2="458" stroke="#7F77DD" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text class="sub" x="96" y="458" dominant-baseline="central">User wallet interactions (connect, sign, broadcast)</text>
+
+  <line x1="56" y1="478" x2="86" y2="478" stroke="#378ADD" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text class="sub" x="96" y="478" dominant-baseline="central">AI agent ↔ Gemini (prompt and structured function calls)</text>
+
+  <line x1="56" y1="498" x2="86" y2="498" stroke="#D4537E" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text class="sub" x="96" y="498" dominant-baseline="central">Local tool dispatch (agent invokes Bridge / DeFi modules)</text>
+
+  <line x1="56" y1="518" x2="86" y2="518" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text class="sub" x="96" y="518" dominant-baseline="central">On-chain reads and Circle Iris attestation polling</text>
+
+  <line x1="56" y1="538" x2="86" y2="538" stroke="#7F77DD" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+  <text class="sub" x="96" y="538" dominant-baseline="central">Signed transaction broadcast (any of 4 testnet RPCs)</text>
+</svg>
