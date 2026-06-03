@@ -1,11 +1,12 @@
+[README.md](https://github.com/user-attachments/files/28561671/README.md)
 # Arc Agentic USDC — AI Agent + Real CCTP V2
 
 > **Stablecoins Commerce Stack Challenge submission · Track 4: Agentic Economy**
 
 A working multi-chain USDC dApp where an **AI agent** plans and executes real on-chain transactions on behalf of the user. Built as a single static HTML file, integrating Circle's official CCTP V2 contracts and Gemini's function-calling API.
 
-🔗 **Live demo:** _[your Vercel URL]_
-📂 **Repo:** _[your GitHub URL]_
+🔗 **Live demo:** https://arc-cross-chain-demo.vercel.app
+📂 **Repo:** https://github.com/cookhaihai/arc-cross-chain-demo
 
 ---
 
