@@ -706,54 +706,18 @@
         </button>
       </div>
 
-      <!-- MetaMask -->
-      <div onclick="connectMetaMask()"
-           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer mb-3 transition">
-        <!-- MetaMask fox SVG inline (simplified) -->
-        <div class="w-11 h-11 rounded-xl bg-[#f6851b]/15 border border-[#f6851b]/30 flex items-center justify-center shrink-0">
-          <svg width="22" height="22" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M35.9 2L21.4 12.6l2.6-6.2L35.9 2z" fill="#E17726"/>
-            <path d="M2.1 2l14.4 10.7-2.5-6.3L2.1 2z" fill="#E27625"/>
-            <path d="M30.7 26.2l-3.9 5.9 8.3 2.3 2.4-8.1-6.8-.1z" fill="#E27625"/>
-            <path d="M.5 26.3l2.3 8.1 8.3-2.3-3.9-5.9-6.7.1z" fill="#E27625"/>
-            <path d="M10.7 17l-2.3 3.5 8.2.4-.3-8.8-5.6 4.9z" fill="#E27625"/>
-            <path d="M27.3 17l-5.7-5-1.6 8.9 8.2-.4-2.9-3.5z" fill="#E27625"/>
-            <path d="M11.1 32.1l4.9-2.4-4.3-3.3-.6 5.7z" fill="#E27625"/>
-            <path d="M22 29.7l5 2.4-.7-5.7-4.3 3.3z" fill="#E27625"/>
-          </svg>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-sm">MetaMask</div>
-          <div class="text-xs text-white/50 mt-0.5" data-i18n="wallet_metamask_sub">Browser extension</div>
-        </div>
-        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
+      <!-- Discovered wallets (populated by EIP-6963 discovery) -->
+      <div id="walletList" class="space-y-3"></div>
+
+      <!-- Fallback hint when no wallets detected -->
+      <div id="walletNone" class="hidden mt-2 bg-amber-500/10 border border-amber-400/30 rounded-2xl p-4 text-[12px] text-amber-200/90 leading-snug">
+        <i class="fas fa-triangle-exclamation text-amber-400 mr-1"></i>
+        <span data-i18n="wallet_none_hint">No browser wallets detected. Install MetaMask, Rabby, OKX Wallet, Coinbase Wallet, or any EVM-compatible wallet to continue.</span>
       </div>
 
-      <!-- WalletConnect -->
-      <div onclick="connectWalletConnect()"
-           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer mb-3 transition">
-        <div class="w-11 h-11 rounded-xl bg-[#3b99fc]/15 border border-[#3b99fc]/30 flex items-center justify-center shrink-0">
-          <i class="fas fa-qrcode text-[#3b99fc] text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-sm">WalletConnect</div>
-          <div class="text-xs text-white/50 mt-0.5" data-i18n="wallet_wc_sub">Scan with mobile wallet</div>
-        </div>
-        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
-      </div>
-
-      <!-- Other -->
-      <div onclick="connectOther()"
-           class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer transition">
-        <div class="w-11 h-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
-          <i class="fas fa-ellipsis text-white/60 text-lg"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-sm" data-i18n="wallet_other">Other Wallets</div>
-          <div class="text-xs text-white/50 mt-0.5">Rainbow · OKX · Rabby …</div>
-        </div>
-        <i class="fas fa-chevron-right text-white/30 text-xs"></i>
-      </div>
+      <p class="mt-5 text-[11px] text-purple-300/60 leading-relaxed" data-i18n="wallet_eip6963_hint">
+        Wallets are auto-detected via EIP-6963. Any installed EVM wallet should appear above.
+      </p>
     </div>
   </div>
 
@@ -2461,9 +2425,10 @@ Always respond in the language the user wrote in.`;
       footer_sub:'All DeFi actions are frontend demos ·',
       footer_docs:'Real integration: see official docs',
       modal_title:'Connect Wallet',
-      wallet_metamask_sub:'Browser extension',
+      wallet_none_hint:'No browser wallets detected. Install MetaMask, Rabby, OKX Wallet, Coinbase Wallet, or any EVM-compatible wallet to continue.',
+      wallet_eip6963_hint:'Wallets are auto-detected via EIP-6963. Any installed EVM wallet should appear above.',
       wallet_wc_sub:'Scan with mobile wallet',
-      wallet_other:'Other Wallets', btn_cancel:'Cancel',
+      btn_cancel:'Cancel',
       kit_key_title:'Circle Kit Key',
       kit_key_desc1:'Get yours from',
       kit_key_desc2:'→ Keys → Create Kit Key.',
@@ -2594,9 +2559,10 @@ Always respond in the language the user wrote in.`;
       footer_sub:'所有 DeFi 操作均为前端演示 ·',
       footer_docs:'真实集成请参考官方文档',
       modal_title:'连接钱包',
-      wallet_metamask_sub:'浏览器扩展',
+      wallet_none_hint:'未检测到任何浏览器钱包。请安装 MetaMask、Rabby、OKX Wallet、Coinbase Wallet 或其他 EVM 兼容钱包。',
+      wallet_eip6963_hint:'通过 EIP-6963 自动识别钱包，已安装的 EVM 钱包都会显示在上方。',
       wallet_wc_sub:'手机钱包扫码',
-      wallet_other:'其他钱包', btn_cancel:'取消',
+      btn_cancel:'取消',
       kit_key_title:'Circle Kit Key',
       kit_key_desc1:'到',
       kit_key_desc2:'→ Keys → Create Kit Key 申请。',
@@ -2690,7 +2656,10 @@ Always respond in the language the user wrote in.`;
   }
 
   // ── Wallet ────────────────────────────────────────────
-  function showWalletModal() { document.getElementById('walletModal').classList.remove('hidden'); }
+  function showWalletModal() {
+    discoverWallets();  // re-broadcast EIP-6963 request in case wallets load late
+    document.getElementById('walletModal').classList.remove('hidden');
+  }
   function hideWalletModal() { document.getElementById('walletModal').classList.add('hidden'); }
 
   // ── Kit Key modal ────────────────────────────────────
@@ -2813,14 +2782,88 @@ Always respond in the language the user wrote in.`;
     if (sFee && sAmt) sAmt.textContent = `-${sFee.feeUsdc.toFixed(4)} USDC`;
   }
 
-  async function connectMetaMask() {
+  // ── EIP-6963 Multi-wallet discovery ──────────────────────
+  // Auto-detects every installed EVM wallet (MetaMask, Rabby, OKX, Coinbase, Brave, Phantom, etc.)
+  // Each wallet broadcasts an "announceProvider" event when we send a "requestProvider" event.
+  // See: https://eips.ethereum.org/EIPS/eip-6963
+  const discoveredWallets = new Map();  // uuid → { info, provider }
+
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const { info, provider: walletProvider } = event.detail || {};
+    if (!info?.uuid || !walletProvider) return;
+    discoveredWallets.set(info.uuid, { info, provider: walletProvider });
+    renderWalletList();
+  });
+
+  function discoverWallets() {
+    discoveredWallets.clear();
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    // Fallback: if a wallet only injects window.ethereum (no EIP-6963), include it as "Injected wallet"
+    setTimeout(() => {
+      if (discoveredWallets.size === 0 && window.ethereum) {
+        discoveredWallets.set('injected-fallback', {
+          info: {
+            uuid: 'injected-fallback',
+            name: window.ethereum.isMetaMask ? 'MetaMask' : 'Injected Wallet',
+            icon: '',
+            rdns: 'unknown',
+          },
+          provider: window.ethereum,
+        });
+        renderWalletList();
+      }
+    }, 100);
+  }
+
+  function renderWalletList() {
+    const list = document.getElementById('walletList');
+    const none = document.getElementById('walletNone');
+    if (!list) return;
+    if (discoveredWallets.size === 0) {
+      list.innerHTML = '';
+      none?.classList.remove('hidden');
+      return;
+    }
+    none?.classList.add('hidden');
+    const wallets = Array.from(discoveredWallets.values());
+    list.innerHTML = wallets.map(({ info }) => {
+      const iconHtml = info.icon
+        ? `<img src="${escHtml(info.icon)}" alt="${escHtml(info.name)}" class="w-11 h-11 rounded-xl object-contain bg-white/5 p-1.5"/>`
+        : `<div class="w-11 h-11 rounded-xl bg-purple-500/15 border border-purple-400/30 flex items-center justify-center shrink-0"><i class="fas fa-wallet text-purple-300 text-lg"></i></div>`;
+      return `
+        <div data-uuid="${escHtml(info.uuid)}" onclick="connectWalletByUuid(this.dataset.uuid)"
+             class="flex items-center gap-4 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 p-4 rounded-2xl cursor-pointer transition">
+          ${iconHtml}
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm">${escHtml(info.name)}</div>
+            <div class="text-xs text-white/50 mt-0.5">${escHtml(info.rdns || 'Browser extension')}</div>
+          </div>
+          <i class="fas fa-chevron-right text-white/30 text-xs"></i>
+        </div>`;
+    }).join('');
+    renderIcons(list);
+  }
+
+  // Run discovery immediately on page load (some wallets respond only once at startup)
+  discoverWallets();
+
+  async function connectWalletByUuid(uuid) {
+    const entry = discoveredWallets.get(uuid);
+    if (!entry) { alert('Wallet not found'); return; }
+    await connectWithProvider(entry.provider, entry.info?.name || 'Wallet');
+  }
+
+  // Core connect logic — works with any EIP-1193 provider, not just MetaMask
+  async function connectWithProvider(walletProvider, displayName) {
     hideWalletModal();
-    if (!hasEthereum()) { alert(t('alert_install_mm')); return; }
-    if (!hasEthers())   { alert('ethers.js failed to load. Check network connection.'); return; }
+    if (!hasEthers()) { alert('ethers.js failed to load. Check network connection.'); return; }
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await walletProvider.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) throw new Error('No accounts returned');
       account = accounts[0];
-      provider = new ethers.BrowserProvider(window.ethereum);
+      // Store the active wallet provider for the rest of the app to use
+      window.ethereum = walletProvider;  // simplest compat path — all existing code reads window.ethereum
+      provider = new ethers.BrowserProvider(walletProvider);
       signer = await provider.getSigner();
       const btn = document.getElementById('connectBtn');
       btn.innerHTML = `<i class="fas fa-check-circle text-emerald-500"></i> ${t('connected_prefix')} ${account.slice(0,6)}…${account.slice(-4)}`;
@@ -2828,9 +2871,11 @@ Always respond in the language the user wrote in.`;
       renderIcons(btn);
 
       // Listen for account / chain changes (dedup: remove any previous handlers first)
-      if (window.__walletHandlers) {
-        window.ethereum.removeListener('accountsChanged', window.__walletHandlers.acc);
-        window.ethereum.removeListener('chainChanged', window.__walletHandlers.chain);
+      if (window.__walletHandlers && window.__walletHandlers.provider) {
+        try {
+          window.__walletHandlers.provider.removeListener('accountsChanged', window.__walletHandlers.acc);
+          window.__walletHandlers.provider.removeListener('chainChanged', window.__walletHandlers.chain);
+        } catch {}
       }
       const accHandler = (accs) => {
         if (accs.length === 0) {
@@ -2854,16 +2899,16 @@ Always respond in the language the user wrote in.`;
       const chainHandler = async () => {
         // Re-init provider + signer for new chain, then refresh all chain-derived UI
         try {
-          provider = new ethers.BrowserProvider(window.ethereum);
+          provider = new ethers.BrowserProvider(walletProvider);
           signer = await provider.getSigner();
         } catch(e) { console.warn('Re-init signer failed:', e); }
         refreshAllBalances();
         updateBridgeGasEstimate();
         updateSendGasEstimate();
       };
-      window.ethereum.on('accountsChanged', accHandler);
-      window.ethereum.on('chainChanged', chainHandler);
-      window.__walletHandlers = { acc: accHandler, chain: chainHandler };
+      walletProvider.on('accountsChanged', accHandler);
+      walletProvider.on('chainChanged', chainHandler);
+      window.__walletHandlers = { acc: accHandler, chain: chainHandler, provider: walletProvider };
 
       // auto-fetch real balances immediately + periodic refresh every 30s
       refreshAllBalances();
@@ -2873,16 +2918,19 @@ Always respond in the language the user wrote in.`;
       if (window.__balanceTimer) clearInterval(window.__balanceTimer);
       window.__balanceTimer = setInterval(() => refreshAllBalances(), 30_000);
     } catch(e) {
-      console.error('Connect failed:', e);
+      console.error(`Connect failed (${displayName}):`, e);
+      const msg = e?.message || String(e);
+      if (!/user rejected|user denied/i.test(msg)) alert(`Connect failed: ${msg}`);
     }
   }
-  function connectWalletConnect() {
-    hideWalletModal();
-    alert('WalletConnect integration coming soon. Please use MetaMask for now.');
-  }
-  function connectOther() {
-    hideWalletModal();
-    alert('Rainbow / OKX / Rabby integration coming soon. Please use MetaMask for now.');
+
+  // Backwards-compat: old code paths still call connectMetaMask
+  async function connectMetaMask() {
+    // Find MetaMask in discovered wallets, fall back to window.ethereum
+    const mm = Array.from(discoveredWallets.values()).find(w => /metamask/i.test(w.info?.name || ''));
+    if (mm) return connectWithProvider(mm.provider, 'MetaMask');
+    if (window.ethereum) return connectWithProvider(window.ethereum, 'MetaMask');
+    alert(t('alert_install_mm'));
   }
 
   // ── Bridge ────────────────────────────────────────────
