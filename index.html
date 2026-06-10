@@ -252,10 +252,12 @@
                    class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
                 <span class="text-white/20">·</span>
                 <a href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Google) ↗</a>
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance required — Google account only">ETH (Google) ↗</a>
                 <span class="text-white/20">·</span>
-                <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Alchemy ↗</a>
+                <a href="https://faucets.chain.link/sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance required — just connect wallet">Chainlink ↗</a>
               </div>
             </div>
 
@@ -269,11 +271,13 @@
                 <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
                    class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
                 <span class="text-white/20">·</span>
-                <a href="https://www.alchemy.com/faucets/base-sepolia" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Alchemy) ↗</a>
+                <a href="https://faucets.chain.link/base-sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance required — just connect wallet">ETH (Chainlink) ↗</a>
                 <span class="text-white/20">·</span>
-                <a href="https://portal.cdp.coinbase.com/products/faucet" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Coinbase ↗</a>
+                <a href="https://www.l2faucet.com/base" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance, no account — uses device passkey">L2 Faucet ↗</a>
               </div>
             </div>
 
@@ -287,11 +291,13 @@
                 <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer"
                    class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">USDC ↗</a>
                 <span class="text-white/20">·</span>
-                <a href="https://www.alchemy.com/faucets/arbitrum-sepolia" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">ETH (Alchemy) ↗</a>
+                <a href="https://faucets.chain.link/arbitrum-sepolia" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance required — just connect wallet">ETH (Chainlink) ↗</a>
                 <span class="text-white/20">·</span>
-                <a href="https://bridge.arbitrum.io" target="_blank" rel="noopener noreferrer"
-                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2">Bridge ↗</a>
+                <a href="https://www.l2faucet.com/arbitrum" target="_blank" rel="noopener noreferrer"
+                   class="text-purple-300 hover:text-white text-[11px] underline underline-offset-2"
+                   title="No mainnet balance, no account — uses device passkey">L2 Faucet ↗</a>
               </div>
             </div>
 
@@ -562,18 +568,20 @@
       <!-- Suggested prompts -->
       <div class="mb-4">
         <div class="text-[10px] text-purple-300 font-semibold uppercase tracking-wider mb-2" data-i18n="agent_examples">Try these</div>
-        <div class="flex flex-wrap gap-2">
-          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
-            Bridge 1 USDC from Sepolia to Arc
-          </button>
-          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
-            What's my balance on every chain?
-          </button>
-          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition">
-            Find the chain with the most USDC and move 50% to Arc
-          </button>
-          <button onclick="useAgentPrompt(this.textContent)" class="text-xs px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-200 hover:text-white transition">
-            <i class="fas fa-rotate text-[10px] mr-1"></i> Do I have any stuck bridges? Resume them.
+        <div class="flex flex-wrap gap-2" id="agentExamples">
+          <button onclick="useAgentPromptKey('agent_ex_1')"
+                  class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition"
+                  data-i18n="agent_ex_1">Bridge 1 USDC from Sepolia to Arc</button>
+          <button onclick="useAgentPromptKey('agent_ex_2')"
+                  class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition"
+                  data-i18n="agent_ex_2">What's my balance on every chain?</button>
+          <button onclick="useAgentPromptKey('agent_ex_3')"
+                  class="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-white/80 hover:text-white transition"
+                  data-i18n="agent_ex_3">Find the chain with the most USDC and move 50% to Arc</button>
+          <button onclick="useAgentPromptKey('agent_ex_4')"
+                  class="text-xs px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/30 rounded-full text-emerald-200 hover:text-white transition flex items-center gap-1.5">
+            <i class="fas fa-rotate text-[10px]"></i>
+            <span data-i18n="agent_ex_4">Do I have any stuck bridges? Resume them.</span>
           </button>
         </div>
       </div>
@@ -591,6 +599,7 @@
       <div class="flex gap-2">
         <input id="agentInput" type="text"
                placeholder="Ask the agent…"
+               data-i18n-placeholder="agent_input_placeholder"
                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAgentMessage()}"
                class="flex-1 bg-black/30 border border-white/10 hover:border-white/20 focus:border-purple-400/60 rounded-2xl px-4 py-3 text-sm font-medium focus:outline-none transition text-white placeholder-white/30">
         <button onclick="sendAgentMessage()" id="agentSendBtn"
@@ -1368,7 +1377,33 @@
   ];
 
   // System prompt — defines agent personality and rules
-  const AGENT_SYSTEM_PROMPT = `You are an AI agent embedded in a cross-chain USDC dApp built on Arc Testnet. You help users move and manage stablecoins across 4 testnets (Arc, Sepolia, Base Sepolia, Arbitrum Sepolia) using Circle's CCTP V2 protocol.
+  // System prompt — language-aware so Gemini responds naturally in the user's UI language.
+  // Tool names and chain identifiers stay in English (they are API symbols, not display text).
+  function getAgentSystemPrompt() {
+    if (currentLang === 'zh') {
+      return `你是一个嵌入在 Arc Testnet 跨链 USDC dApp 里的 AI 代理。你帮助用户在 4 条测试网（Arc、Sepolia、Base Sepolia、Arbitrum Sepolia）之间用 Circle CCTP V2 协议转移和管理稳定币。
+
+你可以调用的工具：
+- get_balances：读取用户在所有链上的 USDC 余额
+- bridge_usdc：跨链 USDC 转账（Arc/Sepolia/Base/Arb Sepolia 互转）
+- send_usdc：同链 USDC 转账
+- get_wallet_info：查看用户钱包地址和当前所在链
+- get_pending_bridges：列出已 burn 但还没 mint 的跨链交易（资金安全，可恢复）
+- resume_mint：通过重新轮询 attestation 并在目标链调用 receiveMessage，完成卡住的跨链
+
+行为规则：
+1. **先规划再执行。** 用户提出请求时，先简短说明你打算做什么，再调用工具。
+2. **不要编造余额或地址。** 需要时先调 get_balances 或 get_wallet_info。
+3. **简洁。** 不寒暄，直接进入正题。
+4. **仅限测试网。** 如果用户把测试网和主网混淆，提醒他们这是测试环境。
+5. **如果金额超过余额，拒绝并建议更小金额。**
+6. **多步任务时，先解释每一步再执行。** 例如："我先查你各链余额，然后从余额最多的链上跨链。"
+7. **所有交易都需要用户钱包签名** —— 你无法绕过这一步。
+8. **如果用户提到"卡住的 bridge"或"pending"**，先调 get_pending_bridges 列出，然后对相关记录调用 resume_mint。
+
+始终用中文回复用户。`;
+    }
+    return `You are an AI agent embedded in a cross-chain USDC dApp built on Arc Testnet. You help users move and manage stablecoins across 4 testnets (Arc, Sepolia, Base Sepolia, Arbitrum Sepolia) using Circle's CCTP V2 protocol.
 
 Capabilities you have via tools:
 - get_balances: read user's USDC across all chains
@@ -1389,10 +1424,16 @@ Behavior rules:
 8. **If user mentions a stuck bridge or "pending"**, first call get_pending_bridges to list them, then offer resume_mint for the relevant entry.
 
 Always respond in the language the user wrote in.`;
+  }
 
   function useAgentPrompt(text) {
     document.getElementById('agentInput').value = text;
     document.getElementById('agentInput').focus();
+  }
+  // i18n-aware version: takes a translation key, looks up the localized prompt text.
+  // This ensures clicking an example prompt always uses the user's current language.
+  function useAgentPromptKey(key) {
+    useAgentPrompt(t(key));
   }
 
   function agentRenderMessage(role, content, isHtml = false) {
@@ -1433,7 +1474,7 @@ Always respond in the language the user wrote in.`;
       <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0 mt-0.5">
         <i class="fas fa-sparkles text-white text-[10px]"></i>
       </div>
-      <div class="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm text-white/60 italic">Thinking…</div>`;
+      <div class="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm text-white/60 italic">${t('agent_thinking')}</div>`;
     c.appendChild(wrap);
     c.scrollTop = c.scrollHeight;
     renderIcons(wrap);
@@ -1448,7 +1489,7 @@ Always respond in the language the user wrote in.`;
     const text = input.value.trim();
     if (!text) return;
     if (!GEMINI_API_KEY) {
-      agentRenderMessage('system', '⚙ Set your Gemini API key first — click "Gemini API Key" button above.');
+      agentRenderMessage('system', `⚙ ${t('agent_set_key')}`);
       showAgentKeyModal();
       return;
     }
@@ -1461,7 +1502,7 @@ Always respond in the language the user wrote in.`;
       await agentLoop();
     } catch (e) {
       agentHideTyping();
-      agentRenderMessage('system', `⚠ Agent error: ${e?.message || e}`);
+      agentRenderMessage('system', `⚠ ${t('agent_error')}: ${e?.message || e}`);
       console.error('Agent error:', e);
     } finally {
       document.getElementById('agentSendBtn').disabled = false;
@@ -1498,7 +1539,7 @@ Always respond in the language the user wrote in.`;
         agentHideTyping();
         // Show what the agent is about to do
         agentRenderMessage('system',
-          `🔧 Calling <code class="bg-black/30 px-1.5 py-0.5 rounded text-pink-300">${fc.functionCall.name}(${JSON.stringify(fc.functionCall.args || {})})</code>`,
+          `🔧 ${t('agent_calling')} <code class="bg-black/30 px-1.5 py-0.5 rounded text-pink-300">${fc.functionCall.name}(${JSON.stringify(fc.functionCall.args || {})})</code>`,
           true);
         agentShowTyping();
         let result;
@@ -1516,7 +1557,7 @@ Always respond in the language the user wrote in.`;
       agentMessages.push({ role: 'user', parts: functionResponses });
     }
     agentHideTyping();
-    agentRenderMessage('system', '⚠ Agent reached max iterations.');
+    agentRenderMessage('system', `⚠ ${t('agent_max_iter')}`);
   }
 
   async function callGemini(history, attempt = 0) {
@@ -1527,7 +1568,7 @@ Always respond in the language the user wrote in.`;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
     const body = {
       contents: history,
-      systemInstruction: { parts: [{ text: AGENT_SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: getAgentSystemPrompt() }] },
       tools: [{ functionDeclarations: AGENT_TOOLS }],
       generationConfig: { temperature: 0.2 },
     };
@@ -1995,18 +2036,25 @@ Always respond in the language the user wrote in.`;
       if (balance < totalAmount) {
         const have = ethers.formatUnits(balance, cfg.usdcDecimals);
         const need = ethers.formatUnits(totalAmount, cfg.usdcDecimals);
-        throw new Error(`Insufficient USDC. You have ${have}, need ${need} (${feeInfo.feeUsdc} fee + ${feeInfo.netUsdc} to recipient).`);
+        throw new Error(
+          t('err_send_insufficient')
+            .replace('{have}', have)
+            .replace('{need}', need)
+            .replace('{fee}', feeInfo.feeUsdc)
+            .replace('{net}', feeInfo.netUsdc)
+        );
       }
       // Make user aware this is TWO transactions
       const ok = confirm(
-        `Send ${amountStr} USDC on ${cfg.name}?\n\n` +
-        `⚠ This will require TWO wallet signatures:\n` +
-        `  1. Creator fee: ${feeInfo.feeUsdc.toFixed(4)} USDC → ${feeInfo.recipient.slice(0,6)}…${feeInfo.recipient.slice(-4)}\n` +
-        `  2. Main transfer: ${feeInfo.netUsdc.toFixed(4)} USDC → ${to.slice(0,6)}…${to.slice(-4)}\n\n` +
-        `If you cancel the second one, the fee transaction (step 1) cannot be reversed.\n\n` +
-        `Continue?`
+        t('confirm_send_two_tx')
+          .replace('{amt}', amountStr)
+          .replace('{chain}', cfg.name)
+          .replace('{fee}', feeInfo.feeUsdc.toFixed(4))
+          .replace('{feeAddr}', `${feeInfo.recipient.slice(0,6)}…${feeInfo.recipient.slice(-4)}`)
+          .replace('{net}', feeInfo.netUsdc.toFixed(4))
+          .replace('{toAddr}', `${to.slice(0,6)}…${to.slice(-4)}`)
       );
-      if (!ok) throw new Error('Cancelled by user');
+      if (!ok) throw new Error(t('err_cancelled'));
     }
 
     // Step 1: creator fee (if any) - separate transaction
@@ -2047,8 +2095,9 @@ Always respond in the language the user wrote in.`;
     } catch (e) {
       // Fail-closed: don't let the bridge proceed if we can't verify destination gas.
       throw new Error(
-        `Could not verify destination gas on ${toCfg.name} (RPC error: ${e?.shortMessage || e?.message || 'unknown'}). ` +
-        `Please try again in a moment — bridging now risks the mint step failing.`
+        t('err_dest_gas_rpc')
+          .replace('{chain}', toCfg.name)
+          .replace('{error}', e?.shortMessage || e?.message || 'unknown')
       );
     }
     const isUsdcGas = toCfg.nativeCurrency?.symbol === 'USDC';
@@ -2063,9 +2112,11 @@ Always respond in the language the user wrote in.`;
       const sym = toCfg.nativeCurrency?.symbol || 'native';
       const min = isUsdcGas ? '0.05' : '0.0005';
       throw new Error(
-        `Insufficient gas on destination chain ${toCfg.name}. ` +
-        `You have ${parseFloat(have).toFixed(6)} ${sym}, need at least ${min} ${sym} to mint USDC there. ` +
-        `Get test ${sym} from the Bridge tab faucet links.`
+        t('err_dest_gas_insufficient')
+          .replace('{chain}', toCfg.name)
+          .replace('{have}', parseFloat(have).toFixed(6))
+          .replace('{sym}', sym).replace('{sym}', sym).replace('{sym}', sym)
+          .replace('{min}', min)
       );
     }
   }
@@ -2091,7 +2142,12 @@ Always respond in the language the user wrote in.`;
     if (srcBalance < amount) {
       const have = ethers.formatUnits(srcBalance, fromCfg.usdcDecimals);
       const need = ethers.formatUnits(amount, fromCfg.usdcDecimals);
-      throw new Error(`Insufficient USDC on ${fromCfg.name}. You have ${have}, need ${need}.`);
+      throw new Error(
+        t('err_bridge_insufficient_usdc')
+          .replace('{chain}', fromCfg.name)
+          .replace('{have}', have)
+          .replace('{need}', need)
+      );
     }
 
     // 0b. Destination-chain native gas check — ALWAYS check
@@ -2176,10 +2232,7 @@ Always respond in the language the user wrote in.`;
     const attestation = await pollAttestation(fromCfg.cctpDomain, burnTx.hash);
     if (!attestation) {
       // Attestation timeout — burn succeeded, mint can be resumed later via History
-      const err = new Error(
-        `Attestation timed out. Your funds are safe — burn succeeded on ${fromCfg.name}. ` +
-        `Use "Resume Mint" in History tab once attestation completes (usually within a few minutes).`
-      );
+      const err = new Error(t('err_attestation_timeout').replace('{chain}', fromCfg.name));
       err.recoverable = true;
       err.recoveryStage = 'attestation';
       err.burnHash = burnTx.hash;
@@ -2200,8 +2253,9 @@ Always respond in the language the user wrote in.`;
       mintHash = mintTx.hash;
     } catch (mintErr) {
       const err = new Error(
-        `Mint failed on ${toCfg.name}: ${mintErr?.shortMessage || mintErr?.reason || mintErr?.message}. ` +
-        `Your funds are safe — burn succeeded. Use "Resume Mint" in History tab to try again.`
+        t('err_mint_failed')
+          .replace('{chain}', toCfg.name)
+          .replace('{detail}', mintErr?.shortMessage || mintErr?.reason || mintErr?.message || '')
       );
       err.recoverable = true;
       err.recoveryStage = 'mint';
@@ -2263,7 +2317,7 @@ Always respond in the language the user wrote in.`;
       // Poll attestation (may have completed by now)
       const attestation = await pollAttestation(entry.sourceDomain ?? fromCfg.cctpDomain, burnHash);
       if (!attestation) {
-        return { error: 'attestation_pending', message: 'Attestation not ready yet. Try again in a minute.' };
+        return { error: 'attestation_pending', message: t('err_attestation_pending') };
       }
       // Verify destination gas BEFORE asking the user to switch & sign
       // (Same check as initial bridge — prevents Resume Mint from failing the same way.)
@@ -2382,6 +2436,18 @@ Always respond in the language the user wrote in.`;
       label_gas:'Network fee (est.)', label_creator_fee:'Creator fee',
       rate:'Rate',
       agent_subtitle:'Talk to an AI agent. It plans, asks for confirmation, then executes real testnet transactions.',
+      // Agent UI runtime strings
+      agent_thinking:'Thinking…',
+      agent_input_placeholder:'Ask the agent…',
+      agent_calling:'Calling',
+      agent_error:'Agent error',
+      agent_max_iter:'Agent reached max iterations.',
+      agent_set_key:'Set your Gemini API key first — click "Gemini API Key" button above.',
+      // Example prompts (clicking these fills the input box)
+      agent_ex_1:'Bridge 1 USDC from Sepolia to Arc',
+      agent_ex_2:"What's my balance on every chain?",
+      agent_ex_3:'Find the chain with the most USDC and move 50% to Arc',
+      agent_ex_4:'Do I have any stuck bridges? Resume them.',
       agent_btn_key:'Gemini API Key',
       agent_examples:'Try these',
       agent_empty:'Ask the agent anything about your testnet USDC.',
@@ -2394,7 +2460,7 @@ Always respond in the language the user wrote in.`;
       label_from:'From', label_to:'To', label_amount:'Amount', label_balance:'Balance:',
       btn_connect:'Connect Wallet', btn_bridge:'Start Bridge',
       faucets_title:'Testnet Faucets',
-      faucets_hint:'All USDC faucets use the same Circle faucet — choose your network on the page',
+      faucets_hint:'All faucets listed are no-mainnet-balance-required. USDC links share the Circle faucet — pick your network on the page.',
       defi_subtitle:'Send and balance check work on all 4 testnets. Swap is a UI demo (real DEX coming).',
       swap_kitkey:'Real integration requires a Circle Console Kit Key',
       swap_pay:'You pay', swap_receive:'You receive (est.)',
@@ -2441,6 +2507,16 @@ Always respond in the language the user wrote in.`;
       // dynamic
       alert_connect_wallet:'Please connect your wallet first.',
       alert_install_mm:'Please install MetaMask.',
+      // Bridge / Send / Resume Mint error messages (shown in red panel inside progress)
+      err_dest_gas_rpc:'Could not verify destination gas on {chain} (RPC error: {error}). Please try again in a moment — bridging now risks the mint step failing.',
+      err_dest_gas_insufficient:'Insufficient gas on destination chain {chain}. You have {have} {sym}, need at least {min} {sym} to mint USDC there. Get test {sym} from the Bridge tab faucet links.',
+      err_bridge_insufficient_usdc:'Insufficient USDC on {chain}. You have {have}, need {need}.',
+      err_attestation_timeout:'Attestation timed out. Your funds are safe — burn succeeded on {chain}. Use "Resume Mint" in History tab once attestation completes (usually within a few minutes).',
+      err_mint_failed:'Mint failed on {chain}: {detail}. Your funds are safe — burn succeeded. Use "Resume Mint" in History tab to try again.',
+      err_send_insufficient:'Insufficient USDC. You have {have}, need {need} ({fee} fee + {net} to recipient).',
+      err_attestation_pending:'Attestation not ready yet. Try again in a minute.',
+      err_cancelled:'Cancelled by user',
+      confirm_send_two_tx:'Send {amt} USDC on {chain}?\n\n⚠ This will require TWO wallet signatures:\n  1. Creator fee: {fee} USDC → {feeAddr}\n  2. Main transfer: {net} USDC → {toAddr}\n\nIf you cancel the second one, the fee transaction (step 1) cannot be reversed.\n\nContinue?',
       alert_amount:'Please enter an amount greater than 0.',
       alert_same_chain:'Source and destination cannot be the same.',
       alert_invalid_addr:'Please enter a valid EVM address.',
@@ -2516,6 +2592,18 @@ Always respond in the language the user wrote in.`;
       label_gas:'网络费用（预估）', label_creator_fee:'开发者抽成',
       rate:'汇率',
       agent_subtitle:'和 AI 代理对话。它会先规划、征求确认、然后执行真实的测试网交易。',
+      // Agent UI 运行时文案
+      agent_thinking:'思考中…',
+      agent_input_placeholder:'问 AI 代理任何问题…',
+      agent_calling:'正在调用',
+      agent_error:'代理出错',
+      agent_max_iter:'代理已达到最大迭代次数。',
+      agent_set_key:'请先设置 Gemini API 密钥 —— 点击上方「Gemini API 密钥」按钮。',
+      // 示例 prompt（点击会自动填入输入框）
+      agent_ex_1:'把 1 USDC 从 Sepolia 跨链到 Arc',
+      agent_ex_2:'我各条链上的余额是多少？',
+      agent_ex_3:'找出余额最多的链，把一半 USDC 跨链到 Arc',
+      agent_ex_4:'我有卡住的跨链吗？帮我恢复。',
       agent_btn_key:'Gemini API 密钥',
       agent_examples:'试试这些',
       agent_empty:'问 AI 代理任何关于你的测试网 USDC 的问题。',
@@ -2528,7 +2616,7 @@ Always respond in the language the user wrote in.`;
       label_from:'从哪里出发', label_to:'目的地', label_amount:'跨链数量', label_balance:'余额：',
       btn_connect:'连接钱包', btn_bridge:'开始跨链',
       faucets_title:'测试网领水',
-      faucets_hint:'所有 USDC 领水都用 Circle Faucet，进去后选择对应网络',
+      faucets_hint:'所有领水均无需主网余额。USDC 链接共用 Circle faucet，进去后选择对应网络。',
       defi_subtitle:'Send 和余额查询支持全部 4 条测试网。Swap 是 UI 演示（真实 DEX 即将上线）。',
       swap_kitkey:'真实集成需申请 Circle Console Kit Key',
       swap_pay:'支付', swap_receive:'获得（预估）',
@@ -2575,6 +2663,16 @@ Always respond in the language the user wrote in.`;
       // dynamic
       alert_connect_wallet:'请先连接钱包。',
       alert_install_mm:'请安装 MetaMask。',
+      // 错误消息（在红色错误面板里显示）
+      err_dest_gas_rpc:'无法验证 {chain} 上的 gas 余额（RPC 错误：{error}）。请稍后重试 —— 现在跨链可能导致 mint 步骤失败。',
+      err_dest_gas_insufficient:'目标链 {chain} gas 不足。当前 {have} {sym}，至少需要 {min} {sym} 才能 mint USDC。可以从 Bridge 页面的领水链接获取测试 {sym}。',
+      err_bridge_insufficient_usdc:'{chain} 上 USDC 余额不足。当前 {have}，需要 {need}。',
+      err_attestation_timeout:'Attestation 超时。资金安全 —— {chain} 上的 burn 已成功。等几分钟后到 History 页面用「继续 Mint」完成跨链。',
+      err_mint_failed:'{chain} 上的 Mint 失败：{detail}。资金安全 —— burn 已成功。到 History 页面用「继续 Mint」重试。',
+      err_send_insufficient:'USDC 余额不足。当前 {have}，需要 {need}（{fee} 抽成 + {net} 给收款人）。',
+      err_attestation_pending:'Attestation 还没就绪。1 分钟后再试。',
+      err_cancelled:'用户已取消',
+      confirm_send_two_tx:'在 {chain} 上发送 {amt} USDC？\n\n⚠ 这将需要两次钱包签名：\n  1. 开发者抽成：{fee} USDC → {feeAddr}\n  2. 主转账：{net} USDC → {toAddr}\n\n如果你取消第二次签名，第一笔抽成交易无法自动撤回。\n\n继续？',
       alert_amount:'请输入大于 0 的数量。',
       alert_same_chain:'起点和终点不能相同。',
       alert_invalid_addr:'请输入有效的 EVM 钱包地址。',
@@ -2612,6 +2710,10 @@ Always respond in the language the user wrote in.`;
       } else {
         el.textContent = val;
       }
+    });
+    // Also translate input placeholders (data-i18n-placeholder="key")
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
     });
     document.title = lang === 'zh'
       ? '跨链 USDC Bridge | CCTP V2 演示'
