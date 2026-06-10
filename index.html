@@ -742,8 +742,11 @@
       </div>
 
       <div class="text-[11px] text-purple-300/80 leading-relaxed mb-4 space-y-1.5">
+        <p class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg px-3 py-2 text-emerald-200">
+          ✓ <span data-i18n="kit_key_optional">Optional — the demo works fully without a key. Adding one only raises your Iris API rate limit.</span>
+        </p>
         <p><span data-i18n="kit_key_desc1">Get yours from</span> <a href="https://console.circle.com" target="_blank" rel="noopener noreferrer" class="text-purple-300 underline">console.circle.com</a> <span data-i18n="kit_key_desc2">→ Keys → Create Kit Key.</span></p>
-        <p class="text-amber-300/90">⚠ <span data-i18n="kit_key_warn">Add domain whitelist in Console — anyone visiting your page can read this key.</span></p>
+        <p class="text-amber-300/90">⚠ <span data-i18n="kit_key_warn">Never share a Kit Key. If you suspect leakage, rotate it immediately in Circle Console.</span></p>
         <p><span data-i18n="kit_key_storage">Stored only in your browser (localStorage), never in code.</span></p>
       </div>
 
@@ -2492,7 +2495,8 @@ Always respond in the language the user wrote in.`;
       kit_key_title:'Circle Kit Key',
       kit_key_desc1:'Get yours from',
       kit_key_desc2:'→ Keys → Create Kit Key.',
-      kit_key_warn:'Add domain whitelist in Console — anyone visiting your page can read this key.',
+      kit_key_optional:'Optional — the demo works fully without a key. Adding one only raises your Iris API rate limit.',
+      kit_key_warn:'Never share a Kit Key. If you suspect leakage, rotate it immediately in Circle Console.',
       kit_key_storage:'Stored only in your browser (localStorage), never in code.',
       kit_key_label:'Kit Key',
       kit_key_show:'Show key',
@@ -2648,7 +2652,8 @@ Always respond in the language the user wrote in.`;
       kit_key_title:'Circle Kit Key',
       kit_key_desc1:'到',
       kit_key_desc2:'→ Keys → Create Kit Key 申请。',
-      kit_key_warn:'请在 Console 配置域名白名单 — 任何访问你页面的人都能读到这个 key。',
+      kit_key_optional:'可选 — demo 不填 key 也完全可用，填 key 仅用于提高 Iris API 速率限制。',
+      kit_key_warn:'切勿分享 Kit Key。如怀疑泄露，请立即去 Circle Console 重新生成。',
       kit_key_storage:'仅保存在你的浏览器（localStorage），不会写进代码。',
       kit_key_label:'Kit Key',
       kit_key_show:'显示密钥',
@@ -2713,6 +2718,17 @@ Always respond in the language the user wrote in.`;
       ? '跨链 USDC Bridge | CCTP V2 演示'
       : 'Cross-Chain USDC Bridge | CCTP V2 Demo';
     updateConnectBtnLang();
+
+    // Re-render any dynamically-injected panels that exist outside data-i18n
+    // (success panel, history, etc.) so language change reflects everywhere.
+    const resultPanel = document.getElementById('resultPanel');
+    if (resultPanel && !resultPanel.classList.contains('hidden') && window.__lastBridgeResult) {
+      const { result, fromKey, toKey } = window.__lastBridgeResult;
+      renderBridgeSuccess(result, fromKey, toKey);
+    }
+    if (document.getElementById('historyList')) {
+      try { renderHistory(); } catch {}
+    }
   }
 
   function updateConnectBtnLang() {
@@ -3112,6 +3128,28 @@ Always respond in the language the user wrote in.`;
     }
   }
 
+  // Re-renders the bridge success panel. Called both right after a successful bridge
+  // AND from setLang() — so flipping EN/ZH after a bridge translates the dynamic content too.
+  function renderBridgeSuccess(result, fromKey, toKey) {
+    const fromName = CHAINS[fromKey].name, toName = CHAINS[toKey].name;
+    const feeRow = result.feeUsdc
+      ? `<div class="flex justify-between"><span class="text-amber-300/80">${t('success_creator_fee')}</span><span class="font-mono text-amber-300">-${result.feeUsdc.toFixed(4)} USDC</span></div>`
+      : '';
+    document.getElementById('successText').innerHTML = `
+      <div class="text-lg font-semibold mb-3">${t('success_bridged').replace('{amt}', result.bridgedAmount).replace('{from}', fromName).replace('{to}', toName)}</div>
+      <div class="bg-black/30 border border-white/10 rounded-xl p-3 text-[12px] space-y-1.5 mt-3 text-left">
+        <div class="flex justify-between"><span class="text-purple-300/80">${t('success_total_input')}</span><span class="font-mono text-white/90">${result.totalAmount} USDC</span></div>
+        ${feeRow}
+        <div class="flex justify-between font-semibold pt-1 border-t border-white/10"><span class="text-emerald-300/90">${t('success_bridged_minted')}</span><span class="font-mono text-emerald-300">${result.bridgedAmount} USDC</span></div>
+      </div>
+      <div class="text-xs mt-3 space-y-1 text-left">
+        ${result.feeExplorerUrl ? `<a href="${result.feeExplorerUrl}" target="_blank" class="text-amber-400/80 hover:text-amber-300 underline block">${t('success_fee_tx')} ↗</a>` : ''}
+        ${result.approveExplorerUrl ? `<a href="${result.approveExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_approve_tx')} ↗</a>` : ''}
+        <a href="${result.sourceExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_burn_tx').replace('{chain}', fromName)} ↗</a>
+        <a href="${result.destExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_mint_tx').replace('{chain}', toName)} ↗</a>
+      </div>`;
+  }
+
   async function startBridge() {
     if (!account) { alert(t('alert_connect_wallet')); showWalletModal(); return; }
     const amtInput = document.getElementById('amount');
@@ -3181,24 +3219,9 @@ Always respond in the language the user wrote in.`;
       setTimeout(() => {
         document.getElementById('progressPanel').classList.add('hidden');
         document.getElementById('resultPanel').classList.remove('hidden');
-        const fromName = CHAINS[fromKey].name, toName = CHAINS[toKey].name;
-        // Show full breakdown — total input, fee (if any), bridged amount, recipient
-        const feeRow = result.feeUsdc
-          ? `<div class="flex justify-between"><span class="text-amber-300/80">${t('success_creator_fee')}</span><span class="font-mono text-amber-300">-${result.feeUsdc.toFixed(4)} USDC</span></div>`
-          : '';
-        document.getElementById('successText').innerHTML = `
-          <div class="text-lg font-semibold mb-3">${t('success_bridged').replace('{amt}', result.bridgedAmount).replace('{from}', fromName).replace('{to}', toName)}</div>
-          <div class="bg-black/30 border border-white/10 rounded-xl p-3 text-[12px] space-y-1.5 mt-3 text-left">
-            <div class="flex justify-between"><span class="text-purple-300/80">${t('success_total_input')}</span><span class="font-mono text-white/90">${result.totalAmount} USDC</span></div>
-            ${feeRow}
-            <div class="flex justify-between font-semibold pt-1 border-t border-white/10"><span class="text-emerald-300/90">${t('success_bridged_minted')}</span><span class="font-mono text-emerald-300">${result.bridgedAmount} USDC</span></div>
-          </div>
-          <div class="text-xs mt-3 space-y-1 text-left">
-            ${result.feeExplorerUrl ? `<a href="${result.feeExplorerUrl}" target="_blank" class="text-amber-400/80 hover:text-amber-300 underline block">${t('success_fee_tx')} ↗</a>` : ''}
-            ${result.approveExplorerUrl ? `<a href="${result.approveExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_approve_tx')} ↗</a>` : ''}
-            <a href="${result.sourceExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_burn_tx').replace('{chain}', fromName)} ↗</a>
-            <a href="${result.destExplorerUrl}" target="_blank" class="text-emerald-400/80 hover:text-emerald-300 underline block">${t('success_mint_tx').replace('{chain}', toName)} ↗</a>
-          </div>`;
+        // Cache the last successful bridge data so we can re-render on language change
+        window.__lastBridgeResult = { result, fromKey, toKey };
+        renderBridgeSuccess(result, fromKey, toKey);
       }, 600);
       refreshAllBalances();
     } catch (e) {
