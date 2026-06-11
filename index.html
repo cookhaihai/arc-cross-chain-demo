@@ -2411,12 +2411,20 @@ Always respond in the language the user wrote in.`;
   }
 
   async function pollAttestation(sourceDomain, txHash, maxAttempts = 60, interval = 2000) {
-    const url = `${IRIS_API_BASE}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+    // Backend integration: try our /api/iris-proxy first (same-origin, no CORS, optional server-side
+    // Kit Key). Falls back to direct Iris API if the proxy is unreachable (e.g. running index.html
+    // locally without Vercel, or proxy temporarily down). This is what makes the project a real
+    // frontend + backend split — per the Track 4 submission requirement.
+    const proxyUrl  = `/api/iris-proxy?sourceDomain=${sourceDomain}&txHash=${txHash}`;
+    const directUrl = `${IRIS_API_BASE}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+    let useProxy = true;  // first attempt uses our backend; flip to direct on failure
+
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const headers = {};
-        if (CIRCLE_KIT_KEY) headers['Authorization'] = `Bearer ${CIRCLE_KIT_KEY}`;
-        const res = await fetch(url, { headers });
+        // Only attach Kit Key when calling Iris directly — the proxy injects its own server-side key.
+        if (!useProxy && CIRCLE_KIT_KEY) headers['Authorization'] = `Bearer ${CIRCLE_KIT_KEY}`;
+        const res = await fetch(useProxy ? proxyUrl : directUrl, { headers });
         if (res.ok) {
           const data = await res.json();
           // V2 returns { messages: [{ status, message, attestation, ... }] }
@@ -2424,9 +2432,19 @@ Always respond in the language the user wrote in.`;
           if (msg && msg.status === 'complete' && msg.attestation && msg.attestation !== 'PENDING') {
             return { message: msg.message, attestation: msg.attestation };
           }
+        } else if (useProxy && (res.status === 404 || res.status >= 500)) {
+          // Backend missing (404) or broken (5xx) → switch to direct Iris for rest of attempts
+          console.warn('[iris] proxy returned', res.status, '— falling back to direct Iris');
+          useProxy = false;
         }
       } catch (e) {
-        console.warn('Iris poll attempt', i, e.message);
+        if (useProxy) {
+          // Network error on proxy (e.g. running locally without backend) → fall back
+          console.warn('[iris] proxy unreachable, falling back to direct Iris:', e.message);
+          useProxy = false;
+        } else {
+          console.warn('[iris] direct poll attempt', i, e.message);
+        }
       }
       if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, interval));
     }
