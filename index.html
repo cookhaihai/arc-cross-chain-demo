@@ -118,9 +118,16 @@
 
       <!-- Hero -->
       <div class="text-center mb-6">
-        <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500/80 to-indigo-500/80 text-white text-xs font-medium px-5 py-2 rounded-full mb-5 border border-purple-400/30">
-          <i class="fas fa-circle-nodes text-purple-200 text-xs"></i>
-          <span data-i18n="badge_cctp">CCTP Native Cross-Chain</span>
+        <div class="inline-flex items-center gap-2 mb-5">
+          <div class="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500/80 to-indigo-500/80 text-white text-xs font-medium px-4 py-2 rounded-full border border-purple-400/30">
+            <i class="fas fa-circle-nodes text-purple-200 text-xs"></i>
+            <span data-i18n="badge_cctp">CCTP Native Cross-Chain</span>
+          </div>
+          <div class="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500/80 to-orange-500/80 text-white text-xs font-semibold px-3 py-2 rounded-full border border-amber-400/40"
+               title="CCTP V2 Fast Transfer — confirmed-level attestation, ~10-30s vs 5-15min for Standard">
+            <i class="fas fa-bolt text-yellow-100 text-[10px]"></i>
+            <span data-i18n="badge_fast">Fast Transfer</span>
+          </div>
         </div>
         <h2 class="text-3xl md:text-4xl font-semibold leading-tight tracking-tight" data-i18n="hero_title">Cross-Chain USDC Bridge</h2>
         <p class="text-base text-purple-200/80 mt-3" data-i18n="hero_desc">Powered by CCTP V2 · Sub-second finality · 4 testnets</p>
@@ -870,6 +877,13 @@
         <div id="bcFeeRow" class="hidden flex justify-between">
           <span class="text-amber-300/80" data-i18n="bc_creator_fee">Creator fee</span>
           <span id="bcFeeAmt" class="font-mono text-amber-300">—</span>
+        </div>
+        <div id="bcCctpFeeRow" class="hidden flex justify-between">
+          <span class="text-orange-300/80 flex items-center gap-1">
+            <i class="fas fa-bolt text-[10px] text-orange-300/60"></i>
+            <span data-i18n="bc_cctp_fee">Fast Transfer fee</span>
+          </span>
+          <span id="bcCctpFeeAmt" class="font-mono text-orange-300">—</span>
         </div>
         <div class="flex justify-between font-semibold pt-1.5 border-t border-white/10">
           <span class="text-emerald-300/90" data-i18n="bc_recipient_gets">Recipient gets</span>
@@ -2195,11 +2209,19 @@ Always respond in the language the user wrote in.`;
     }
 
     // ── Step 2: burn on source ──
+    // CCTP V2 Fast Transfer: minFinalityThreshold=1000 (confirmed-level attestation, ~10-30s)
+    // vs Standard (=2000, requires full finality, 5-15 min on testnet).
+    //
+    // Fast Transfer requires maxFee >= the per-route Fast fee from Circle's fees API.
+    // We query it live (with a safe fallback if API is down); the fee is deducted from
+    // the burned amount during destination mint, NOT charged to the user separately.
     onStep && onStep(2, 'burning');
     const mintRecipient = ethers.zeroPadValue(recipientAddr, 32);
     const destCaller = ethers.ZeroHash;
-    const maxFee = 0n;
-    const minFinality = 2000;
+    const minFinality = 1000;  // Fast Transfer
+    const feeBps = await fetchFastTransferFee(fromCfg.cctpDomain, toCfg.cctpDomain);
+    // maxFee = bridgeAmount * feeBps / 10_000 (rounded up to ensure we cover the actual fee)
+    const maxFee = (bridgeAmount * BigInt(feeBps) + 9999n) / 10000n;
     const burnTx = await messenger.depositForBurn(
       bridgeAmount, toCfg.cctpDomain, mintRecipient, fromCfg.usdcAddress,
       destCaller, maxFee, minFinality
@@ -2361,6 +2383,33 @@ Always respond in the language the user wrote in.`;
   // maxAttempts default 60 = ~2 min total at 2s interval (used during the initial bridge flow).
   // Resume Mint passes maxAttempts=1 so it returns immediately and the user isn't blocked
   // staring at "Resuming…" — they can re-click later.
+  // --- Fetch the current Fast Transfer fee (in basis points) from Circle's fees API ---
+  // Endpoint: GET /v2/burn/USDC/fees/{srcDomain}/{destDomain}
+  // Returns {data: [{finalityThreshold, minimumFee}, ...]} — pick the Fast entry (1000).
+  // Falls back to a safe 14 bps (0.14%) if the API is down — high enough to cover
+  // historical Fast fees on tested routes, low enough to be tolerable on small amounts.
+  async function fetchFastTransferFee(srcDomain, destDomain) {
+    const url = `${IRIS_API_BASE}/v2/burn/USDC/fees/${srcDomain}/${destDomain}`;
+    const FALLBACK_BPS = 14;
+    try {
+      const headers = {};
+      if (CIRCLE_KIT_KEY) headers['Authorization'] = `Bearer ${CIRCLE_KIT_KEY}`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) return FALLBACK_BPS;
+      const data = await res.json();
+      // Response shape: { data: [{ finalityThreshold: 1000, minimumFee: <bps> }, ...] }
+      // or sometimes just an array; handle both defensively.
+      const list = Array.isArray(data) ? data : (data.data || []);
+      const fast = list.find(x => x.finalityThreshold === 1000);
+      const bps = fast?.minimumFee;
+      if (typeof bps !== 'number' || bps < 0) return FALLBACK_BPS;
+      return bps;
+    } catch (e) {
+      console.warn('[iris fees] lookup failed, using fallback bps:', e?.message);
+      return FALLBACK_BPS;
+    }
+  }
+
   async function pollAttestation(sourceDomain, txHash, maxAttempts = 60, interval = 2000) {
     const url = `${IRIS_API_BASE}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
     for (let i = 0; i < maxAttempts; i++) {
@@ -2413,6 +2462,8 @@ Always respond in the language the user wrote in.`;
       bc_breakdown:'Amount',
       bc_total_input:'Total input',
       bc_creator_fee:'Creator fee',
+      bc_cctp_fee:'Fast Transfer fee',
+      badge_fast:'Fast Transfer',
       bc_recipient_gets:'Recipient gets',
       bc_signatures:'Wallet signatures required',
       bc_fee_warn:'The creator fee is sent first as a separate transaction. If you cancel any later step, the fee will NOT be refunded automatically.',
@@ -2571,6 +2622,8 @@ Always respond in the language the user wrote in.`;
       bc_breakdown:'金额',
       bc_total_input:'输入总额',
       bc_creator_fee:'开发者抽成',
+      bc_cctp_fee:'Fast Transfer 手续费',
+      badge_fast:'极速跨链',
       bc_recipient_gets:'收款方实收',
       bc_signatures:'需要钱包签名次数',
       bc_fee_warn:'开发者抽成会作为独立交易先发送。如果你随后取消任何一步，已扣 fee 不会自动退回。',
@@ -3091,7 +3144,10 @@ Always respond in the language the user wrote in.`;
   function confirmBridge({ fromKey, toKey, fromName, toName, amountStr }) {
     const feeInfo = getFeeAmount(amountStr);
     const amt = parseFloat(amountStr);
-    const recipientGets = feeInfo ? feeInfo.netUsdc.toFixed(4) : amt.toFixed(4);
+    const fromCfg = CHAINS[fromKey], toCfg = CHAINS[toKey];
+    // Bridge amount = total input minus creator fee (the part that goes through CCTP)
+    const bridgeAmtBeforeCctpFee = feeInfo ? feeInfo.netUsdc : amt;
+    const recipientGets = bridgeAmtBeforeCctpFee.toFixed(4);  // updated async once we know CCTP fee
 
     document.getElementById('bcFromChain').textContent = fromName;
     document.getElementById('bcToChain').textContent = toName;
@@ -3109,9 +3165,22 @@ Always respond in the language the user wrote in.`;
       feeWarn.classList.add('hidden');
     }
 
+    // Async: fetch live Fast Transfer fee, show in modal once available.
+    const cctpFeeRow = document.getElementById('bcCctpFeeRow');
+    const cctpFeeAmt = document.getElementById('bcCctpFeeAmt');
+    if (cctpFeeRow && cctpFeeAmt) {
+      cctpFeeRow.classList.remove('hidden');
+      cctpFeeAmt.textContent = '…';
+      fetchFastTransferFee(fromCfg.cctpDomain, toCfg.cctpDomain).then(bps => {
+        const cctpFeeUsdc = bridgeAmtBeforeCctpFee * bps / 10000;
+        cctpFeeAmt.textContent = `-${cctpFeeUsdc.toFixed(4)} USDC (${(bps / 100).toFixed(2)}%)`;
+        // Update recipient-gets with the full picture
+        const finalRecipient = bridgeAmtBeforeCctpFee - cctpFeeUsdc;
+        document.getElementById('bcRecipientGets').textContent = `${finalRecipient.toFixed(4)} USDC`;
+      });
+    }
+
     // Estimate signature count: fee (optional) + approve (optional, skipped if already approved) + burn + receiveMessage
-    // We don't pre-check allowance here (it would require an async RPC call before the modal opens),
-    // so we show the MAX count + range, and clearly mark approve as optional.
     const sigList = [];
     if (feeInfo) sigList.push({ label: t('bc_sig_fee'), note: `→ ${feeInfo.recipient.slice(0,6)}…${feeInfo.recipient.slice(-4)}`, optional: false });
     sigList.push({ label: t('bc_sig_approve'), note: t('bc_sig_approve_note'), optional: true });
