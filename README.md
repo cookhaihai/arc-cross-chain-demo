@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/28842817/README.md)
 # Arc Agentic USDC — AI Agent + Real CCTP V2 Fast Transfer
 
 > **Stablecoins Commerce Stack Challenge submission · Track 4: Agentic Economy**
