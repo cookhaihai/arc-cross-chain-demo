@@ -2311,10 +2311,23 @@ Always respond in the language the user wrote in.`;
     if (!fromCfg || !toCfg) return { error: 'unknown_chain' };
 
     try {
-      // Poll attestation (may have completed by now)
-      const attestation = await pollAttestation(entry.sourceDomain ?? fromCfg.cctpDomain, burnHash);
+      // Single quick check (1 attempt, no retry). The user is clicking Resume Mint
+      // explicitly — don't block them for 2 minutes; return immediately.
+      const attestation = await pollAttestation(entry.sourceDomain ?? fromCfg.cctpDomain, burnHash, 1, 0);
       if (!attestation) {
-        return { error: 'attestation_pending', message: t('err_attestation_pending') };
+        // Smart hint: calculate how long ago the burn was so we can tell the user
+        // realistic timing for their specific source chain.
+        const burnAgeMin = Math.floor((Date.now() - entry.ts) / 60000);
+        // Sepolia is slow (~5-15min on testnet); other chains usually faster
+        const isSlowChain = entry.fromChain === 'sepolia' || fromCfg.cctpDomain === 0;
+        const typicalMin = isSlowChain ? '5-15' : '1-3';
+        return {
+          error: 'attestation_pending',
+          message: t('err_attestation_pending_smart')
+            .replace('{age}', burnAgeMin)
+            .replace('{typical}', typicalMin)
+            .replace('{chain}', fromCfg.name),
+        };
       }
       // Verify destination gas BEFORE asking the user to switch & sign
       // (Same check as initial bridge — prevents Resume Mint from failing the same way.)
@@ -2345,10 +2358,11 @@ Always respond in the language the user wrote in.`;
   }
 
   // --- Poll Circle Iris API for attestation (CCTP V2 endpoint) ---
-  async function pollAttestation(sourceDomain, txHash) {
+  // maxAttempts default 60 = ~2 min total at 2s interval (used during the initial bridge flow).
+  // Resume Mint passes maxAttempts=1 so it returns immediately and the user isn't blocked
+  // staring at "Resuming…" — they can re-click later.
+  async function pollAttestation(sourceDomain, txHash, maxAttempts = 60, interval = 2000) {
     const url = `${IRIS_API_BASE}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
-    const maxAttempts = 60;      // ~2 min total at 2s interval
-    const interval = 2000;
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const headers = {};
@@ -2365,7 +2379,7 @@ Always respond in the language the user wrote in.`;
       } catch (e) {
         console.warn('Iris poll attempt', i, e.message);
       }
-      await new Promise(r => setTimeout(r, interval));
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, interval));
     }
     return null;
   }
@@ -2513,6 +2527,7 @@ Always respond in the language the user wrote in.`;
       err_mint_failed:'Mint failed on {chain}: {detail}. Your funds are safe — burn succeeded. Use "Resume Mint" in History tab to try again.',
       err_send_insufficient:'Insufficient USDC. You have {have}, need {need} ({fee} fee + {net} to recipient).',
       err_attestation_pending:'Attestation not ready yet. Try again in a minute.',
+      err_attestation_pending_smart:'Attestation not ready yet (burn was {age} min ago). {chain} typically takes {typical} min on testnet. Funds are safe — try Resume Mint again in a few minutes.',
       err_cancelled:'Cancelled by user',
       confirm_send_two_tx:'Send {amt} USDC on {chain}?\n\n⚠ This will require TWO wallet signatures:\n  1. Creator fee: {fee} USDC → {feeAddr}\n  2. Main transfer: {net} USDC → {toAddr}\n\nIf you cancel the second one, the fee transaction (step 1) cannot be reversed.\n\nContinue?',
       alert_amount:'Please enter an amount greater than 0.',
@@ -2670,6 +2685,7 @@ Always respond in the language the user wrote in.`;
       err_mint_failed:'{chain} 上的 Mint 失败：{detail}。资金安全 —— burn 已成功。到 History 页面用「继续 Mint」重试。',
       err_send_insufficient:'USDC 余额不足。当前 {have}，需要 {need}（{fee} 抽成 + {net} 给收款人）。',
       err_attestation_pending:'Attestation 还没就绪。1 分钟后再试。',
+      err_attestation_pending_smart:'Attestation 还没就绪（burn 在 {age} 分钟前完成）。{chain} 测试网通常需要 {typical} 分钟。资金安全 —— 过几分钟再点 Resume Mint。',
       err_cancelled:'用户已取消',
       confirm_send_two_tx:'在 {chain} 上发送 {amt} USDC？\n\n⚠ 这将需要两次钱包签名：\n  1. 开发者抽成：{fee} USDC → {feeAddr}\n  2. 主转账：{net} USDC → {toAddr}\n\n如果你取消第二次签名，第一笔抽成交易无法自动撤回。\n\n继续？',
       alert_amount:'请输入大于 0 的数量。',
